@@ -2,42 +2,41 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from typing import List, Union
 from openai import OpenAI
-import os
-
-# Инициализация клиента OpenAI
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Инициализация FastAPI
-app = FastAPI()
+app = FastAPI(title="Ingos Insurance API")
 
-# Разрешаем CORS (иначе браузер блокирует запросы с HTML)
+# Разрешаем запросы с любых источников (CORS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # можно указать конкретный домен, например твой фронт
+    allow_origins=["*"],  # при желании можешь ограничить доменом сайта
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Инициализация клиента OpenAI
+client = OpenAI(api_key="YOUR_OPENAI_API_KEY_HERE")  # вставь свой ключ
 
-# ---------- МОДЕЛИ ----------
+# --- МОДЕЛИ ---
 class LineItem(BaseModel):
     label: str
-    value: float
+    value: Union[str, float, int]  # теперь можно и числа, и текст
     issum: bool
 
 
 class CheckRequest(BaseModel):
     client_total: float
     server_total: float
-    lines: list[LineItem]
+    lines: List[LineItem]
 
 
-# ---------- МАРШРУТЫ ----------
+# --- ЭНДПОИНТЫ ---
 @app.get("/")
 async def root():
-    """Проверка, что сервер запущен"""
+    """Тестовый маршрут для проверки статуса API"""
     return JSONResponse(
         content={"status": "ok", "message": "API запущен и готов принимать запросы"}
     )
@@ -45,8 +44,12 @@ async def root():
 
 @app.post("/check")
 async def check(request: CheckRequest):
-    """Проверка корректности расчёта страховой суммы через GPT"""
+    """
+    Проверка корректности расчёта страховой суммы.
+    GPT сверяет данные клиента и сервера.
+    """
     try:
+        # Формируем описание задачи для GPT
         prompt = (
             f"Проверь совпадение итогов. "
             f"Итог по клиенту: {request.client_total}. "
@@ -55,8 +58,9 @@ async def check(request: CheckRequest):
             f"Ответь JSONом вида {{'match': true/false, 'reason': 'пояснение'}}."
         )
 
+        # Отправляем запрос в OpenAI
         response = client.chat.completions.create(
-            model="gpt-4o-mini",  # можно заменить на gpt-3.5-turbo при необходимости
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
         )
