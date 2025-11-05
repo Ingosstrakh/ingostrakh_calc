@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: ingosstrakh-calc
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server_fixed2:app --host 0.0.0.0 --port 10000
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
