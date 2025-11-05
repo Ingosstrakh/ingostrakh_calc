@@ -18,7 +18,7 @@ app.add_middleware(
 )
 
 # Инициализация клиента OpenAI
-client = OpenAI(api_key="YOUR_OPENAI_API_KEY_HERE")  # вставь свой ключ
+client = OpenAI(api_key="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")  # вставь свой ключ
 
 # --- МОДЕЛИ ---
 class LineItem(BaseModel):
