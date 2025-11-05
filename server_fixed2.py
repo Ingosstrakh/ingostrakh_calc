@@ -1,59 +1,66 @@
-import os
+# server_fixed2.py
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import openai
+from openai import OpenAI
+import os
 
+# Инициализация FastAPI
 app = FastAPI()
 
-# ✅ Разрешаем фронтенд-запросы откуда угодно (или укажи свой домен)
+# Разрешаем CORS для фронтенда
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Можно ограничить ["https://твоя_страница.html"]
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ✅ Проверка на запуск
-@app.get("/")
-async def root():
-    return {"status": "OK", "message": "API запущен и готов принимать запросы!"}
+# Инициализация клиента OpenAI
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# ✅ Проверка ключа OpenAI
-openai.api_key = os.getenv("OPENAI_API_KEY")
-if not openai.api_key:
-    print("⚠️ ВНИМАНИЕ: переменная OPENAI_API_KEY не установлена!")
+# Модель входных данных
+class LineItem(BaseModel):
+    label: str
+    value: float | str
+    issum: bool
 
-# ✅ Модель для тела запроса
 class CheckRequest(BaseModel):
     client_total: float
     server_total: float
-    lines: list
+    lines: list[LineItem]
+
+@app.get("/")
+def root():
+    return {"status": "ok", "message": "API запущен и готов принимать запросы"}
 
 @app.post("/check")
 async def check(request: CheckRequest):
+    """
+    Проверка корректности расчёта страховой суммы.
+    Отправляет данные модели GPT и получает логическую проверку.
+    """
     try:
-        # Пример логики проверки (вместо OpenAI)
-        if request.client_total > request.server_total:
-            return {
-                "match": False,
-                "reason": f"Страховая сумма клиента ({request.client_total}) превышает общую сумму ({request.server_total})"
-            }
-
-        # Если всё ок, обращаемся к OpenAI (пример запроса)
-        completion = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "Ты помощник по страховым расчётам."},
-                {"role": "user", "content": f"Проверь корректность расчёта: {request.dict()}"}
-            ]
+        # Формируем описание для GPT
+        prompt = (
+            f"Проверь совпадение итогов. "
+            f"Итог по клиенту: {request.client_total}. "
+            f"Итог по серверу: {request.server_total}. "
+            f"Данные по позициям: {', '.join([f'{l.label}={l.value}' for l in request.lines])}. "
+            f"Ответь JSONом вида {{'match': true/false, 'reason': 'пояснение'}}."
         )
 
-        answer = completion.choices[0].message.content
-        return {"match": True, "ai_response": answer}
+        # Запрос к модели GPT-4 или GPT-3.5
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",  # можешь поменять на gpt-3.5-turbo, если нет доступа
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+        )
+
+        answer = response.choices[0].message.content.strip()
+        return {"success": True, "response": answer}
 
     except Exception as e:
-        print(f"❌ Ошибка: {e}")
-        return {"error": str(e)}
+        return {"success": False, "error": str(e)}
 
