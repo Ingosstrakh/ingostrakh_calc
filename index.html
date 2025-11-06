@@ -1,10 +1,9 @@
 <!DOCTYPE html>
-
 <html lang="ru">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1" name="viewport"/>
-<title>Ипотечный калькулятор — v40 (co-borrowers + house/land)</title>
+<title>Ипотечный калькулятор — v40 (fixed11)</title>
 <style>
 :root{--bg:#071229;--card:#0b2140;--accent:#2f8ef9;--muted:#9fb7d8;--ok:#c7f0df}
 *{box-sizing:border-box}
@@ -47,8 +46,8 @@ input,select,button,textarea{width:100%;padding:10px;border-radius:10px;backgrou
 <div class="header">
 <div class="logo">И</div>
 <div>
-<h1>Ипотечный калькулятор — v40</h1>
-<div class="small">Добавлены созаемщики (до 3) и логика рыночной стоимости дома / земельного участка.</div>
+<h1>Ипотечный калькулятор — v40 (fixed11)</h1>
+<div class="small">Полная версия: созаемщики, дом+земля с надбавкой и админ/debug.</div>
 </div>
 </div>
 <div class="grid">
@@ -204,7 +203,7 @@ input,select,button,textarea{width:100%;padding:10px;border-radius:10px;backgrou
 <h4>Конструктивные требования</h4>
 <ul>
 <li>Внешние и внутренние стены возведены, крыша закрыта, окна установлены</li>
-<li>В материалах наружных стен нет деревянных или иных горючих материалов (если каменный)</li>
+<li>В материалах наружных стен нет деревянного или иных горючих материалов (если каменный)</li>
 <li>Внутри нет источников открытого огня (печь, камин и т.д.)</li>
 </ul>
 <div class="small">Дом соответствует всем требованиям?</div>
@@ -299,28 +298,38 @@ bankEl.addEventListener('change', ()=>{
   updateBorrowerShareDisplay();
 });
 
+// show house market block when prop checkbox toggled and type==house
+document.getElementById('prop').addEventListener('change', ()=> {
+  const propChecked = document.getElementById('prop').checked;
+  if(propChecked && propType.value === 'house'){
+    houseMarketBlock.style.display = 'block';
+  } else {
+    houseMarketBlock.style.display = 'none';
+    landBlock.style.display = 'none';
+    marketWarn.style.display = 'none';
+    landWarn.style.display = 'none';
+  }
+});
+
 lifeChk.addEventListener('change', ()=>{ lifeDiscountWrap.style.display = lifeChk.checked ? 'block' : 'none'; });
 propType.addEventListener('change', ()=>{ 
   materialBlock.style.display = (propType.value === 'house') ? 'block' : 'none';
-  // show market block if house
+  // show market block if house and prop checked
   houseMarketBlock.style.display = (propType.value === 'house' && document.getElementById('prop').checked) ? 'block' : 'none';
 });
 matStone.addEventListener('click', ()=>{ chosenMaterial='stone'; matStone.classList.add('active'); matWood.classList.remove('active'); });
 matWood.addEventListener('click', ()=>{ chosenMaterial='wood'; matWood.classList.add('active'); matStone.classList.remove('active'); });
 showDebug.addEventListener('change', ()=>{ debugBox.style.display = showDebug.checked ? 'block' : 'none'; });
-
 rshbCancel.addEventListener('click', ()=>{ hideModal('modalRshb'); rshbMode = null; });
 rshbOk.addEventListener('click', ()=>{
   const sel = document.querySelector('input[name="rshbMode"]:checked');
   if(!sel){ alert('Выберите режим для Россельхозбанка'); return; }
   rshbMode = sel.value; hideModal('modalRshb');
 });
-
 houseNo.addEventListener('click', ()=>{ hideModal('modalHouse'); houseConfirmed = false; alert('Дом не подтверждён — обратитесь к куратору.'); });
 houseYes.addEventListener('click', ()=>{ hideModal('modalHouse'); houseConfirmed = true; proceedCalculation(true); });
-
 clearBtn.addEventListener('click', ()=>{ // clear everything incl. co-borrowers
-  document.getElementById('loan').value=''; bankEl.value=''; bankMarkupEl.value=''; document.getElementById('birth').value=''; document.getElementById('start').value=''; document.getElementById('vtbDate').value=''; document.getElementById('gender').value=''; document.getElementById('prop').checked=false; document.getElementById('title').checked=false; document.getElementById('life').checked=false; lifeDiscount.checked=false; lifeDiscountWrap.style.display='none'; propType.value='apartment'; materialBlock.style.display='none'; matStone.classList.remove('active'); matWood.classList.remove('active'); chosenMaterial=null; resultsPlaceholder.innerHTML='Заполните поля и нажмите «Рассчитать».'; debugBox.textContent=''; debugBox.style.display='none';
+  document.getElementById('loan').value=''; bankEl.value=''; bankMarkupEl.value=''; document.getElementById('birth').value=''; document.getElementById('start').value=''; document.getElementById('vtbDate').value=''; document.getElementById('gender').value=''; document.getElementById('prop').checked=false; document.getElementById('title').checked=false; document.getElementById('life').checked=false; lifeDiscount.checked=false; lifeDiscountWrap.style.display='none'; propType.value='apartment'; materialBlock.style.display='none'; matStone.classList.remove('active'); matWood.classList.remove('active'); chosenMaterial=null; resultsPlaceholder.innerHTML='Заполните поля и нажмите «Рассчитать».';
   // remove all co-borrowers
   coContainer.innerHTML = '';
   addCoBtn.disabled = false;
@@ -331,7 +340,6 @@ clearBtn.addEventListener('click', ()=>{ // clear everything incl. co-borrowers
   landWarn.style.display = 'none';
   updateBorrowerShareDisplay();
 });
-
 marketHouseEl.addEventListener('input', ()=>{
   const loan = Number(document.getElementById('loan').value)||0;
   const val = Number(marketHouseEl.value)||0;
@@ -343,9 +351,7 @@ marketHouseEl.addEventListener('input', ()=>{
     landBlock.style.display = 'none';
   }
 });
-
 landValueEl.addEventListener('input', ()=>{ landWarn.style.display = 'none'; });
-
 document.getElementById('birth').addEventListener('change', updateAgeInfo);
 document.getElementById('start').addEventListener('change', updateAgeInfo);
 function updateAgeInfo(){ const age = calcAge(document.getElementById('birth').value, document.getElementById('start').value); ageInfo.textContent = age!==null ? 'Возраст: ' + age + ' лет' : ''; }
@@ -383,7 +389,6 @@ function createCoBlock(index){
   });
   return wrapper;
 }
-
 addCoBtn.addEventListener('click', ()=>{
   if(coCount >= 3) return;
   coCount++;
@@ -392,8 +397,6 @@ addCoBtn.addEventListener('click', ()=>{
   if(coCount >= 3) addCoBtn.disabled = true;
   updateBorrowerShareDisplay();
 });
-
-// helper: read co-borrowers from DOM
 function readCoBorrowers(){
   const arr = [];
   for(let i=1;i<=3;i++){
@@ -407,14 +410,11 @@ function readCoBorrowers(){
   }
   return arr;
 }
-
-// update borrower share display (no visible input for borrower — but we can optionally log)
 function updateBorrowerShareDisplay(){
   // silent for now
 }
 
 /* ========== Core functions ========== */
-
 function getBasePercentForBank(bank, age, gender){
   if(age===null) return null;
   if(age < 18 || age > 64) return null;
@@ -428,7 +428,6 @@ function getBasePercentForBank(bank, age, gender){
   }
   return (gender === 'female') ? femaleTable[age] : maleTable[age];
 }
-
 function calcClick(){
   const loan = Number(document.getElementById('loan').value) || 0;
   const bank = bankEl.value;
@@ -440,16 +439,13 @@ function calcClick(){
   const start = document.getElementById('start').value;
   const gender = document.getElementById('gender').value;
   const discount = document.getElementById('lifeDiscount').checked && !document.getElementById('lifeDiscount').disabled;
-
   if(!loan){ alert('Введите сумму кредита'); return; }
   if(!bank){ alert('Выберите банк'); return; }
   if(lifeChecked && !gender){ alert('Выберите пол для расчёта жизни'); return; }
   if(propTypeVal === 'house' && !chosenMaterial){ alert('Выберите материал наружных стен: каменный или деревянный'); return; }
   if(propTypeVal === 'house' && !houseConfirmed){ showModal('modalHouse'); return; }
-
   proceedCalculation(false);
 }
-
 function proceedCalculation(fromModal){
   const loan = Number(document.getElementById('loan').value) || 0;
   const bank = bankEl.value;
@@ -496,32 +492,45 @@ function proceedCalculation(fromModal){
       if(marketHouse <= 0){
         alert('Введите рыночную стоимость дома'); return;
       }
-      // if marketHouse < loan then land required
-      if(marketHouse < loan){
+
+      // Use rounded comparisons to avoid floating-point edge cases
+      const roundedMarketHouse = Math.round(marketHouse);
+      const roundedLoanWithMarkup = Math.round(loanWithMarkup);
+
+      // if marketHouse < loanWithMarkup then land may be required
+      if(roundedMarketHouse < roundedLoanWithMarkup){
+        // Show land input if not visible and wait for user to fill
+        landBlock.style.display = 'block';
         if(landValue <= 0){
-          alert('Введите стоимость земельного участка'); return;
-        }
-        const total = marketHouse + landValue;
-        if(total < loan){
-          // warning: refer to curator
-          marketWarn.textContent = 'Рыночная стоимость дома и участка меньше суммы кредита — обратитесь к куратору.';
+          marketWarn.textContent = 'Введите стоимость земельного участка';
           marketWarn.style.display = 'block';
           return;
         }
-        if(total > loan){
-          marketWarn.textContent = 'Сумма дома и участка превышает сумму кредита — исправьте значения.';
+        // Now user entered landValue; validate totals against loanWithMarkup
+        const total = marketHouse + landValue;
+        const roundedTotal = Math.round(total);
+        if(roundedTotal < roundedLoanWithMarkup){
+          // warning: refer to curator
+          marketWarn.textContent = 'Рыночная стоимость дома и участка меньше суммы кредита с надбавкой — обратитесь к куратору.';
+          marketWarn.style.display = 'block';
+          return;
+        }
+        if(roundedTotal > roundedLoanWithMarkup){
+          marketWarn.textContent = 'Сумма дома и участка превышает сумму кредита с надбавкой — исправьте значения.';
           marketWarn.style.display = 'block';
           return;
         }
         // compute per-material rates
         const ratePercent = (chosenMaterial === 'stone') ? 0.18 : 0.43;
+        // IMPORTANT CHANGE: house and land insured ON THEIR FACTUAL VALUES (WITHOUT BANK MARKUP)
         const houseSum = marketHouse * (ratePercent/100.0);
-        const landSum = landValue * 0.001; // 0.1%
+        const landSum = landValue * 0.001; // 0.1% -> 0.001
         lines.push({label:'🏠 Страхование дома', value: houseSum, rate: ratePercent, type:'prop'});
         lines.push({label:'🌳 Земельный участок', value: landSum, rate: 0.1, type:'prop'});
       } else {
-        // marketHouse >= loan — insure house for marketHouse but land not needed
+        // marketHouse >= loanWithMarkup — insure house for marketHouse but land not needed
         const ratePercent = (chosenMaterial === 'stone') ? 0.18 : 0.43;
+        // IMPORTANT CHANGE: use marketHouse ( factual ) for calculation
         const houseSum = marketHouse * (ratePercent/100.0);
         lines.push({label:'🏠 Страхование дома', value: houseSum, rate: ratePercent, type:'prop'});
       }
@@ -584,13 +593,13 @@ function proceedCalculation(fromModal){
       const cAge = calcAge(c.birth, start);
       const cBase = getBasePercentForBank(bank, cAge, c.gender);
       if(cBase === null){
-        lines.push({label:`❤️ Жизнь (созаемщик ${c.index})`, value: null, note:'Возраст созаемщика вне диапазона — обратитесь к куратору.'});
+        lines.push({label:`❤️ Жизнание (созаемщик ${c.index})`, value: null, note:'Возраст созаемщика вне диапазона — обратитесь к куратору.'});
         debug.participants.push({role:'co'+c.index, age:cAge, gender:c.gender, share:c.share, rate:null, sum:null});
       } else {
         let cEff = cBase;
         if(discount && !['ДОМ.РФ','Альфа Банк'].includes(bank)) cEff = cEff * 0.75;
         const cSum = loanWithMarkup * ( (Number(c.share)||0) / 100.0 ) * (cEff / 100.0);
-        lines.push({label:`❤️ Жизнь (созаемщик ${c.index})`, value: cSum, rate: cEff, share: c.share, type:'life'});
+        lines.push({label:`❤️ Жизнание (созаемщик ${c.index})`, value: cSum, rate: cEff, share: c.share, type:'life'});
         debug.participants.push({role:'co'+c.index, age:cAge, gender:c.gender, share:c.share, rate:cEff, sum:cSum});
       }
     }
@@ -646,200 +655,462 @@ const rshbMaleWithDis = {18:0.217,19:0.237,20:0.256,21:0.276,22:0.295,23:0.314,2
 const rshbFemaleNoDis = {18:0.091,19:0.091,20:0.092,21:0.093,22:0.093,23:0.094,24:0.095,25:0.095,26:0.096,27:0.097,28:0.097,29:0.098,30:0.109,31:0.126,32:0.142,33:0.152,34:0.162,35:0.173,36:0.183,37:0.193,38:0.206,39:0.220,40:0.233,41:0.246,42:0.259,43:0.291,44:0.322,45:0.354,46:0.385,47:0.417,48:0.462,49:0.507,50:0.552,51:0.598,52:0.643,53:0.721,54:0.799,55:0.876,56:0.954,57:1.032,58:1.110,59:1.188,60:1.266,61:1.344,62:1.422,63:1.499,64:1.577};
 const rshbFemaleWithDis = {18:0.166,19:0.168,20:0.168,21:0.17,22:0.171,23:0.172,24:0.173,25:0.174,26:0.175,27:0.177,28:0.178,29:0.179,30:0.2,31:0.23,32:0.26,33:0.278,34:0.297,35:0.316,36:0.335,37:0.354,38:0.378,39:0.402,40:0.426,41:0.45,42:0.475,43:0.533,44:0.591,45:0.648,46:0.706,47:0.764,48:0.846,49:0.929,50:1.012,51:1.094,52:1.177,53:1.32,54:1.462,55:1.605,56:1.748,57:1.891,58:2.033,59:2.176,60:2.318,61:2.46,62:2.604,63:2.746,64:2.889};
 
-</script>
-
-<script>
+/* ========== Admin UI (restored as in original) ========== */
 document.addEventListener('DOMContentLoaded', function(){
+  try{
+    // Insert admin controls next to calc/clear
+    const calcWrap = document.getElementById('calc').parentNode;
 
-  // Wait until calc button exists
-  const waitForEl = (selector, timeout=3000) => new Promise((resolve, reject) => {
-    const el = document.querySelector(selector);
-    if(el) return resolve(el);
-    const obs = new MutationObserver(()=> {
-      const e = document.querySelector(selector);
-      if(e){ obs.disconnect(); resolve(e); }
-    });
-    obs.observe(document.body, {childList:true, subtree:true});
-    setTimeout(()=> { obs.disconnect(); reject(new Error('timeout')); }, timeout);
-  });
+    const adminWrap = document.createElement('div');
+    adminWrap.id = 'assistantAdminWrap';
+    adminWrap.style.marginTop = '10px';
+    adminWrap.style.display = 'flex';
+    adminWrap.style.alignItems = 'center';
+    adminWrap.style.gap = '8px';
+    adminWrap.style.flexWrap = 'wrap';
 
-  // Admin UI builder
-  (async function initAdmin(){
-    try{
-      const calcWrap = await waitForEl('#calc');
-      // create admin container
-      const adminWrap = document.createElement('div');
-      adminWrap.id = 'assistantAdminWrap';
-      adminWrap.style.marginTop = '10px';
-      adminWrap.style.display = 'flex';
-      adminWrap.style.alignItems = 'center';
-      adminWrap.style.gap = '8px';
-      adminWrap.style.flexWrap = 'wrap';
+    const adminInput = document.createElement('input');
+    adminInput.id = 'adminCodeInput';
+    adminInput.placeholder = 'Код админа';
+    adminInput.style.padding='6px';
+    adminInput.style.width='120px';
+    adminInput.autocomplete = 'off';
 
-      const adminInput = document.createElement('input');
-      adminInput.id = 'adminCodeInput';
-      adminInput.placeholder = 'Код админа';
-      adminInput.style.padding='6px';
-      adminInput.style.width='120px';
-      adminInput.autocomplete = 'off';
+    const adminBtn = document.createElement('button');
+    adminBtn.id = 'adminLoginBtn';
+    adminBtn.textContent = 'Войти';
+    adminBtn.className = 'btn secondary';
 
-      const adminBtn = document.createElement('button');
-      adminBtn.id = 'adminLoginBtn';
-      adminBtn.textContent = 'Войти';
-      adminBtn.className = 'btn secondary';
+    const adminCheckBtn = document.createElement('button');
+    adminCheckBtn.id = 'adminCheckBtn';
+    adminCheckBtn.textContent = '🧠 Проверить у GPT-5';
+    adminCheckBtn.className = 'btn';
+    adminCheckBtn.style.display='none';
+    adminCheckBtn.style.marginLeft='8px';
 
-      const adminCheckBtn = document.createElement('button');
-      adminCheckBtn.id = 'adminCheckBtn';
-      adminCheckBtn.textContent = '🧠 Проверить у GPT-5';
-      adminCheckBtn.className = 'btn primary';
-      adminCheckBtn.style.display='none';
-      adminCheckBtn.style.marginLeft='8px';
+    const adminNotice = document.createElement('div');
+    adminNotice.id = 'adminNotice';
+    adminNotice.style.display='none';
+    adminNotice.style.color='#cfe9ff';
+    adminNotice.style.fontSize='13px';
+    adminNotice.style.marginLeft='8px';
 
-      const adminNotice = document.createElement('div');
-      adminNotice.id = 'adminNotice';
-      adminNotice.style.display='none';
-      adminNotice.style.color='#cfe9ff';
-      adminNotice.style.fontSize='13px';
-      adminNotice.style.marginLeft='8px';
+    const adminDebug = document.createElement('pre');
+    adminDebug.id = 'adminDebug';
+    adminDebug.style.display='none';
+    adminDebug.style.background='#fff';
+    adminDebug.style.color='#000';
+    adminDebug.style.padding='8px';
+    adminDebug.style.maxHeight='300px';
+    adminDebug.style.overflow='auto';
+    adminDebug.style.width='100%';
 
-      const adminDebug = document.createElement('pre');
-      adminDebug.id = 'adminDebug';
-      adminDebug.style.display='none';
-      adminDebug.style.background='#fff';
-      adminDebug.style.color='#000';
-      adminDebug.style.padding='8px';
-      adminDebug.style.maxHeight='300px';
-      adminDebug.style.overflow='auto';
-      adminDebug.style.width='100%';
+    adminWrap.appendChild(adminInput);
+    adminWrap.appendChild(adminBtn);
+    adminWrap.appendChild(adminCheckBtn);
+    adminWrap.appendChild(adminNotice);
 
-      adminWrap.appendChild(adminInput);
-      adminWrap.appendChild(adminBtn);
-      adminWrap.appendChild(adminCheckBtn);
-      adminWrap.appendChild(adminNotice);
-      // append after calc button's parent
-      calcWrap.parentNode.appendChild(adminWrap);
-      calcWrap.parentNode.appendChild(adminDebug);
+    calcWrap.appendChild(adminWrap);
+    calcWrap.parentNode.appendChild(adminDebug);
 
-      adminBtn.addEventListener('click', ()=> {
-        const code = adminInput.value.trim();
-        if(code === '1996'){
-          adminCheckBtn.style.display='inline-block';
-          adminNotice.style.display='inline-block';
-          adminNotice.textContent = 'Админ-режим: активирован';
-          adminDebug.style.display='block';
-          alert('Админ-режим активирован');
-          // show debugWrap after admin login
-          const debugWrap = document.getElementById('debugWrap');
-          if(debugWrap) debugWrap.style.display = 'block';
-        } else {
-          alert('❌ Неверный код доступа');
-        }
-      });
-
-      adminCheckBtn.addEventListener('click', async ()=>{
-        adminNotice.textContent = 'Отправка на сервер проверки...';
-        // trigger calc if available
-        const calcBtn = document.getElementById('calc');
-        if(calcBtn) calcBtn.click();
-        await new Promise(r=>setTimeout(r,250));
-        // try to read debugBox content or reconstruct payload
-        let dbgEl = document.getElementById('debugBox') || document.getElementById('debug');
-        let dbgObj = null;
-        if(dbgEl){
-          try{ dbgObj = JSON.parse(dbgEl.textContent); } catch(e){ dbgObj = null; }
-        }
-        const payload = {
-          bank: (document.getElementById('bank') && document.getElementById('bank').value) || null,
-          loan: Number(document.getElementById('loan') && document.getElementById('loan').value) || 0,
-          birth: document.getElementById('birth') ? document.getElementById('birth').value : null,
-          start: document.getElementById('start') ? document.getElementById('start').value : null,
-          gender: (document.getElementById('gender') && document.getElementById('gender').value) || null,
-          propChecked: document.getElementById('prop') ? document.getElementById('prop').checked : false,
-          titleChecked: document.getElementById('title') ? document.getElementById('title').checked : false,
-          lifeChecked: document.getElementById('life') ? document.getElementById('life').checked : false,
-          propType: document.getElementById('propType') ? document.getElementById('propType').value : 'apartment',
-          material: window.chosenMaterial || 'stone',
-          discount: document.getElementById('lifeDiscount') ? document.getElementById('lifeDiscount').checked : false,
-          client_debug: dbgObj
-        };
-        try{
-          const res = await fetch('https://ingostrakh-calc.onrender.com/check',{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify(payload)
-          });
-          if(!res.ok) throw new Error('Server returned ' + res.status);
-          const data = await res.json();
-          if(data.match){
-            adminNotice.textContent = '✅ GPT подтвердил расчёт';
-            adminDebug.textContent = JSON.stringify(data, null, 2);
-          } else {
-            adminNotice.textContent = '❌ GPT не подтвердил расчёт — подробности в логах сервера';
-            adminDebug.textContent = JSON.stringify(data, null, 2);
-          }
-        }catch(err){
-          adminNotice.textContent = 'Ошибка проверки: ' + err.message;
-        }
-      });
-
-    }catch(err){
-      console.warn('Admin UI init failed', err);
-    }
-  })();
-
-  // Install DOM.RF wrapper for getBasePercentForBank without overwriting until original exists.
-  (function installDOMRFWrapper(){
-    const tryInstall = ()=>{
-      if(typeof getBasePercentForBank === 'function' && !getBasePercentForBank.__assistant_wrapped){
-        const orig = getBasePercentForBank;
-        getBasePercentForBank = function(bank, age, gender){
-          try{
-            if(bank === 'ДОМ.РФ' && age !== null && age >=21 && age <=64){
-              if(gender === 'female'){
-                if(typeof domrfFemale !== 'undefined' && domrfFemale[age] !== undefined) return domrfFemale[age];
-              } else {
-                if(typeof domrfMale !== 'undefined' && domrfMale[age] !== undefined) return domrfMale[age];
-              }
-            }
-          }catch(e){}
-          return orig(bank, age, gender);
-        };
-        getBasePercentForBank.__assistant_wrapped = true;
-        try{
-          const bankEl = document.getElementById('bank');
-          if(bankEl && !bankEl.__assistant_event_attached){
-            bankEl.addEventListener('change', ()=> {
-              const b = bankEl.value;
-              const vtbRow = document.getElementById('vtbRow');
-              if(vtbRow) vtbRow.style.display = (b === 'ВТБ') ? 'block' : 'none';
-              const lifeDiscountWrap = document.getElementById('lifeDiscountWrap');
-              if(b === 'ДОМ.РФ' || b === 'Альфа Банк'){
-                const lifeDiscountEl = document.getElementById('lifeDiscount');
-                if(lifeDiscountEl){ lifeDiscountEl.checked=false; lifeDiscountEl.disabled=true; }
-                if(lifeDiscountWrap) lifeDiscountWrap.style.display = (document.getElementById('life').checked)?'block':'none';
-              } else {
-                const lifeDiscountEl = document.getElementById('lifeDiscount');
-                if(lifeDiscountEl) lifeDiscountEl.disabled=false;
-              }
-              if(b === 'Россельхозбанк'){
-                const modal = document.getElementById('modalRshb');
-                if(modal) modal.style.display = 'flex';
-              }
-              const propType = document.getElementById('propType');
-              const materialBlock = document.getElementById('materialBlock');
-              if(propType && materialBlock) materialBlock.style.display = (propType.value === 'house') ? 'block' : 'none';
-            });
-            bankEl.__assistant_event_attached = true;
-          }
-        }catch(e){}
+    adminBtn.addEventListener('click', ()=> {
+      const code = adminInput.value.trim();
+      if(code === 'INGO'){
+        adminCheckBtn.style.display='inline-block';
+        adminNotice.style.display='inline-block';
+        adminNotice.textContent = 'Админ-режим: активирован';
+        adminDebug.style.display='block';
+        alert('Админ-режим активирован');
+        const debugWrap = document.getElementById('debugWrap');
+        if(debugWrap) debugWrap.style.display = 'block';
       } else {
-        setTimeout(tryInstall, 200);
+        alert('❌ Неверный код доступа');
       }
-    };
-    tryInstall();
-  })();
+    });
 
+    adminCheckBtn.addEventListener('click', async ()=>{
+      adminNotice.textContent = 'Отправка на сервер проверки...';
+      const calcBtn = document.getElementById('calc');
+      if(calcBtn) calcBtn.click();
+      await new Promise(r=>setTimeout(r,250));
+      let dbgEl = document.getElementById('debugBox') || document.getElementById('debug');
+      let dbgObj = null;
+      if(dbgEl){
+        try{ dbgObj = JSON.parse(dbgEl.textContent); } catch(e){ dbgObj = null; }
+      }
+      const payload = {
+        bank: (document.getElementById('bank') && document.getElementById('bank').value) || null,
+        loan: Number(document.getElementById('loan') && document.getElementById('loan').value) || 0,
+        birth: document.getElementById('birth') ? document.getElementById('birth').value : null,
+        start: document.getElementById('start') ? document.getElementById('start').value : null,
+        gender: (document.getElementById('gender') && document.getElementById('gender').value) || null,
+        propChecked: document.getElementById('prop') ? document.getElementById('prop').checked : false,
+        titleChecked: document.getElementById('title') ? document.getElementById('title').checked : false,
+        lifeChecked: document.getElementById('life') ? document.getElementById('life').checked : false,
+        propType: document.getElementById('propType') ? document.getElementById('propType').value : 'apartment',
+        material: window.chosenMaterial || 'stone',
+        discount: document.getElementById('lifeDiscount') ? document.getElementById('lifeDiscount').checked : false,
+        client_debug: dbgObj
+      };
+      try{
+        const res = await fetch('https://ingostrakh-calc.onrender.com/check',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(payload)
+        });
+        if(!res.ok) throw new Error('Server returned ' + res.status);
+        const data = await res.json();
+        if(data.match){
+          adminNotice.textContent = '✅ GPT подтвердил расчёт';
+          adminDebug.textContent = JSON.stringify(data, null, 2);
+        } else {
+          adminNotice.textContent = '❌ GPT не подтвердил расчёт — подробности в логах сервера';
+          adminDebug.textContent = JSON.stringify(data, null, 2);
+        }
+      }catch(err){
+        adminNotice.textContent = 'Ошибка проверки: ' + err.message;
+      }
+    });
+
+  }catch(err){
+    console.warn('Admin UI init failed', err);
+  }
 });
 </script>
+
+
+
+<!-- ========== START: Admin-only GPT Autofil block ========== -->
+<style id="gpt_admin_styles">
+  /* Minimal isolated styles — safe to inject at page end */
+  #gpt-admin-lock {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 999999;
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 700;
+    font-family: Arial, sans-serif;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  }
+  #gpt-admin-shell {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    width: 380px;
+    max-width: 92vw;
+    z-index: 999999;
+    background: #0f1720;
+    color: #dff7ff;
+    border-radius: 10px;
+    padding: 12px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    font-family: Inter, Arial, sans-serif;
+    display: none;
+  }
+  #gpt-admin-shell h4 { margin:0 0 8px 0; color:#bfe8ff; font-size:16px; }
+  #gpt-admin-shell input[type="text"], #gpt-admin-shell textarea {
+    width:100%;
+    box-sizing: border-box;
+    border-radius:6px;
+    border:1px solid rgba(255,255,255,0.06);
+    background: rgba(8,18,26,0.9);
+    color:#dff7ff;
+    padding:8px;
+    margin-top:6px;
+    font-family: inherit;
+    font-size:14px;
+  }
+  #gpt-admin-shell textarea { height:110px; resize:vertical; }
+  #gpt-admin-shell .gpt-row { display:flex; gap:8px; margin-top:10px; }
+  #gpt-admin-shell button {
+    background:#1da1ff;
+    color:#04202a;
+    border:none;
+    padding:9px 10px;
+    border-radius:8px;
+    cursor:pointer;
+    font-weight:700;
+    width:100%;
+  }
+  #gpt-admin-shell .small-btn { background:#33414a; color:#fff; padding:8px; border-radius:6px; width:auto; }
+  #gpt-admin-shell .gpt-status { margin-top:8px; color:#bcd8e8; font-size:13px; }
+  #gpt-admin-shell #gptConsole { margin-top:8px; max-height:140px; overflow:auto; padding:8px; background:rgba(255,255,255,0.02); border-radius:6px; font-size:12px; color:#dff7ff; }
+</style>
+
+<!-- small visible lock icon — clicking opens admin shell input -->
+<div id="gpt-admin-lock" title="Admin (ввод кода)" aria-hidden="false">🔒</div>
+
+<div id="gpt-admin-shell" aria-hidden="true" role="dialog" aria-label="Admin panel">
+  <h4>Только для создателя</h4>
+
+  <div>
+    <label style="font-size:13px;color:#9fdbe9">Введите админ-код</label>
+    <input id="gpt-admin-code" type="text" placeholder="Введите код доступа" autocomplete="off" />
+    <div class="gpt-row">
+      <button id="gpt-admin-unlock">Ввести код</button>
+      <button id="gpt-admin-hide" class="small-btn">Скрыть</button>
+    </div>
+  </div>
+
+  <div id="gpt-admin-panel" style="display:none;margin-top:10px">
+    <label style="font-size:13px;color:#9fdbe9">Вставьте текст клиента</label>
+    <textarea id="gpt-client-text" placeholder="Пример: Альфабанк 5.5% 3 588 000 жизнь и имущ квартира 2025 муж 02.02.1989"></textarea>
+
+    <div class="gpt-row">
+      <button id="gpt-autofill-btn">🧠 Автозаполнить и рассчитать</button>
+      <button id="gpt-save-local" class="small-btn">➕ Сохранить в память</button>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+      <button id="gpt-show-mem" class="small-btn">📚 Показать память</button>
+      <button id="gpt-clear-mem" class="small-btn">🗑️ Очистить память</button>
+      <div id="gpt-status" class="gpt-status">Статус: ожидание</div>
+    </div>
+
+    <div id="gptConsole" aria-live="polite"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  /* Config */
+  const ADMIN_CODE = 'INGO';
+  const PARSE_ENDPOINT = 'https://ingostrakh-calc.onrender.com/parse'; // server endpoint
+  const STORAGE_KEY = 'gpt_admin_examples_v1';
+  const MAX_LOCAL = 300;
+
+  /* Elements */
+  const lock = document.getElementById('gpt-admin-lock');
+  const shell = document.getElementById('gpt-admin-shell');
+  const codeInput = document.getElementById('gpt-admin-code');
+  const unlockBtn = document.getElementById('gpt-admin-unlock');
+  const hideBtn = document.getElementById('gpt-admin-hide');
+  const panel = document.getElementById('gpt-admin-panel');
+  const clientText = document.getElementById('gpt-client-text');
+  const autofillBtn = document.getElementById('gpt-autofill-btn');
+  const saveLocalBtn = document.getElementById('gpt-save-local');
+  const showMemBtn = document.getElementById('gpt-show-mem');
+  const clearMemBtn = document.getElementById('gpt-clear-mem');
+  const statusEl = document.getElementById('gpt-status');
+  const consoleEl = document.getElementById('gptConsole');
+
+  /* Helpers */
+  function log(msg){
+    const d = document.createElement('div');
+    d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    consoleEl.prepend(d);
+    console.log('[GPT-ADMIN]', msg);
+  }
+  function loadLocal(){ try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');}catch(e){return [];} }
+  function saveLocal(example){ try{ const arr = loadLocal(); arr.push({text:example, ts:new Date().toISOString()}); localStorage.setItem(STORAGE_KEY, JSON.stringify(arr.slice(-MAX_LOCAL))); log('Saved to local memory'); }catch(e){ console.warn(e);} }
+  function clearLocal(){ localStorage.removeItem(STORAGE_KEY); log('Local memory cleared'); }
+  function showLocalWindow(){
+    const arr = loadLocal();
+    if(!arr.length){ alert('Память пуста'); return; }
+    const w = window.open('','_blank','width=800,height=600');
+    w.document.title = 'GPT - memory';
+    w.document.body.style.whiteSpace = 'pre-wrap';
+    w.document.body.style.fontFamily = 'monospace';
+    w.document.body.innerText = arr.slice(-200).map((x,i)=>`${i+1}. ${x.ts}\n${x.text}`).join('\n\n----\n\n');
+  }
+
+  /* UI behaviors */
+  lock.addEventListener('click', ()=> {
+    shell.style.display = shell.style.display === 'block' ? 'none' : 'block';
+    shell.setAttribute('aria-hidden', shell.style.display === 'block' ? 'false' : 'true');
+  });
+  hideBtn.addEventListener('click', ()=> { shell.style.display='none'; shell.setAttribute('aria-hidden','true'); });
+
+  
+  unlockBtn.addEventListener('click', ()=>{
+    const v = (codeInput.value||'').trim().toUpperCase();
+    if(v === ADMIN_CODE){
+      panel.style.display = 'block';
+      shell.style.display = 'block';
+      shell.setAttribute('aria-hidden','false');
+      codeInput.value = '';
+      statusEl.textContent = 'Статус: Admin доступ открыт';
+      log('Admin unlocked');
+      sessionStorage.setItem('gpt_admin_unlocked','1');
+    } else {
+      statusEl.textContent = 'Статус: Неверный код';
+      panel.style.display = 'none';
+      shell.setAttribute('aria-hidden','true');
+      log('Admin unlock failed — доступ заблокирован');
+      sessionStorage.removeItem('gpt_admin_unlocked');
+    }
+  });
+
+  // persist unlock during session (not permanent)
+  if(sessionStorage.getItem('gpt_admin_unlocked') === '1'){
+    shell.style.display='block';
+    panel.style.display='block';
+    shell.setAttribute('aria-hidden','false');
+    statusEl.textContent = 'Статус: Admin (session)';
+  }
+
+  /* Main autofill logic */
+  async function callParseServer(text){
+    statusEl.textContent = 'Статус: отправлено на сервер...';
+    log('Sending text to parse endpoint');
+    try{
+      const resp = await fetch(PARSE_ENDPOINT, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({text})
+      });
+      if(!resp.ok){
+        const t = await resp.text().catch(()=>'');
+        statusEl.textContent = 'Статус: Сервер вернул ошибку';
+        log('Server error: ' + resp.status + ' ' + t);
+        return null;
+      }
+      const j = await resp.json();
+      if(!j || j.ok !== true || !j.data){
+        statusEl.textContent = 'Статус: Некорректный ответ от сервера';
+        log('Bad JSON response: ' + JSON.stringify(j));
+        return null;
+      }
+      statusEl.textContent = 'Статус: Ответ получен';
+      log('Parsed: ' + JSON.stringify(j.data));
+      return j.data;
+    }catch(err){
+      statusEl.textContent = 'Статус: Ошибка сети или CORS';
+      log('Network error: ' + err);
+      return null;
+    }
+  }
+
+  // Attempt to set a field by many heuristics (won't destroy existing logic)
+  function trySetField(selectors, value){
+    for(const sel of selectors){
+      try{
+        const el = document.querySelector(sel);
+        if(!el) continue;
+        const tag = el.tagName.toLowerCase();
+        if(tag === 'select'){
+          // try match option by text or value
+          const v = String(value).toLowerCase();
+          for(const opt of el.options){
+            if((opt.text||'').toLowerCase().includes(v) || (opt.value||'').toLowerCase() === v){
+              el.value = opt.value;
+              el.dispatchEvent(new Event('change',{bubbles:true}));
+              return true;
+            }
+          }
+          // fallback set
+          el.value = value;
+          el.dispatchEvent(new Event('change',{bubbles:true}));
+          return true;
+        }
+        if(tag === 'input' || tag === 'textarea'){
+          el.focus();
+          el.value = value;
+          el.dispatchEvent(new Event('input',{bubbles:true}));
+          el.dispatchEvent(new Event('change',{bubbles:true}));
+          return true;
+        }
+        // if other element, try innerText
+        try{ el.innerText = value; return true; }catch(e){}
+      }catch(e){ console.warn('trySetField err', e); }
+    }
+    return false;
+  }
+
+  function autofillToForm(parsed){
+    if(!parsed) return {ok:false, reason:'no parsed'};
+    // safe selectors for common fields (adaptable)
+    const map = [
+      {key:'loan', selectors: ['input[name="sum"]','input[name="amount"]','#sum','input[id*="sum"]','input[placeholder*="руб"]']},
+      {key:'bank', selectors: ['select[name="bank"]','select[id*="bank"]','#bank','input[name="bank"]']},
+      {key:'rate', selectors: ['input[name="rate"]','input[id*="rate"]','#rate','input[placeholder*="%"]']},
+      {key:'propType', selectors: ['select[name="propertyType"]','select[id*="property"]','#propertyType']},
+      {key:'year', selectors: ['input[name="year"]','input[id*="year"]','#year']},
+      {key:'material', selectors: ['input[name="material"]','input[id*="material"]']},
+      {key:'birth', selectors: ['input[name="birth"]','input[id*="birth"]','input[placeholder*="дд"]']},
+      {key:'gender', selectors: ['select[name="gender"]','select[id*="gender"]','#gender']}
+    ];
+    const results = {};
+    map.forEach(m=>{
+      if(parsed[m.key] !== undefined && parsed[m.key] !== null && parsed[m.key] !== ''){
+        const ok = trySetField(m.selectors, parsed[m.key]);
+        results[m.key] = ok;
+      }
+    });
+    return results;
+  }
+
+  // find and click Calculate button robustly
+  function clickCalculate(){
+    const keywords = ['рассчитать','расчитать','calculate','посчитать','получить расчет','получить расчет']; // russian variants
+    // 1) search buttons and inputs
+    const candidates = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"], a'));
+    for(const c of candidates){
+      try{
+        const txt = ((c.innerText||c.value||'') + '').toLowerCase().trim();
+        if(!txt) continue;
+        for(const k of keywords){
+          if(txt.includes(k)){
+            c.click();
+            return {ok:true, method:'text_match', node: c};
+          }
+        }
+      }catch(e){}
+    }
+    // 2) search by id/class fragments
+    const alt = document.querySelector('[id*="calc"], [class*="calc"], [id*="calculate"], [class*="calculate"], [id*="submit"], [class*="submit"]');
+    if(alt){ try{ alt.click(); return {ok:true, method:'selector_match', node: alt}; }catch(e){} }
+    // 3) try form submit
+    const form = document.querySelector('form');
+    if(form){ try{ form.submit(); return {ok:true, method:'form_submit'}; }catch(e){} }
+    return {ok:false};
+  }
+
+  /* Button handlers */
+  autofillBtn.addEventListener('click', async ()=>{
+    const t = (clientText.value||'').trim();
+    if(!t){ statusEl.textContent = 'Статус: вставьте текст клиента'; return; }
+    statusEl.textContent = 'Статус: обработка...';
+    const parsed = await callParseServer(t);
+    if(!parsed){ statusEl.textContent = 'Статус: разбор не удался'; return; }
+    // save local memory
+    saveLocal(t);
+    // fill fields
+    const res = autofillToForm(parsed);
+    log('Autofill result: ' + JSON.stringify(res));
+    // click calculate
+    const clk = clickCalculate();
+    if(clk.ok){
+      statusEl.textContent = 'Готово: подставлено и нажата кнопка (' + clk.method + ')';
+      log('Calc clicked by ' + clk.method);
+    } else {
+      statusEl.textContent = 'Готово: подставлено, но не найдена кнопка расчёта';
+      log('Calc button not found');
+    }
+  });
+
+  saveLocalBtn.addEventListener('click', ()=>{
+    const t = (clientText.value||'').trim();
+    if(!t){ alert('Нет текста для сохранения'); return; }
+    saveLocal(t);
+    statusEl.textContent = 'Статус: сохранено локально';
+  });
+
+  showMemBtn.addEventListener('click', showLocalWindow);
+  clearMemBtn.addEventListener('click', ()=>{ if(confirm('Очистить локальную память?')){ clearLocal(); statusEl.textContent='Память очищена'; } });
+
+  /* Expose a debug helper if needed */
+  window.__gpt_admin = {
+    callParseServer, saveLocal, loadLocal, autofillToForm, clickCalculate
+  };
+
+})();
+</script>
+<!-- ========== END: Admin-only GPT Autofil block ========== -->
 </body>
 </html>
