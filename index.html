@@ -1117,5 +1117,301 @@ document.addEventListener('DOMContentLoaded', function(){
 })();
 </script>
 <!-- ========== END: Admin-only GPT Autofil block ========== -->
+
+<script>
+// --- Универсальное определение банка по тексту клиента ---
+function detectAndSetBankFromText() {
+  try {
+    const textarea = document.querySelector('.admin-panel textarea');
+    const bankSelect = document.querySelector('#bank');
+    if (!textarea || !bankSelect) return;
+
+    const text = textarea.value.toLowerCase();
+
+    const banks = {
+      "сбер": "Сбербанк",
+      "втб": "ВТБ",
+      "газпром": "Газпромбанк",
+      "альфа": "Альфа-Банк",
+      "дом рф": "Дом.РФ",
+      "уралсиб": "УРАЛСИБ",
+      "совком": "Совкомбанк",
+      "росбанк": "Росбанк",
+      "открытие": "Открытие",
+      "псб": "ПСБ",
+      "тинькофф": "Тинькофф",
+      "мкб": "МКБ",
+      "гпб": "Газпромбанк"
+    };
+
+    let foundBank = null;
+    for (const [key, value] of Object.entries(banks)) {
+      if (text.includes(key)) {
+        foundBank = value;
+        break;
+      }
+    }
+
+    if (foundBank) {
+      for (const option of bankSelect.options) {
+        if (option.text.toLowerCase().includes(foundBank.toLowerCase())) {
+          bankSelect.value = option.value;
+          console.log("✅ Автоматически выбран банк:", foundBank);
+          return;
+        }
+      }
+      console.warn("⚠️ Банк найден по тексту, но не совпадает с option:", foundBank);
+    } else {
+      console.warn("❌ Банк не найден в тексте клиента.");
+    }
+  } catch (e) {
+    console.error("Ошибка при автоподстановке банка:", e);
+  }
+}
+
+// --- Автоматический вызов при клике на кнопку автозаполнения ---
+document.addEventListener('click', (e) => {
+  if (e.target && e.target.textContent && e.target.textContent.toLowerCase().includes('автозаполнить')) {
+    setTimeout(detectAndSetBankFromText, 500);
+  }
+});
+</script>
+
+
+<script>
+// ===== v7: Smart autofill + on-device training =====
+// Local memory keys
+const BANK_MEMORY_KEY = 'gpt_bank_memory_v1';
+
+function loadBankMemory(){
+  try{ return JSON.parse(localStorage.getItem(BANK_MEMORY_KEY) || '{}'); } catch(e){ return {}; }
+}
+function saveBankMemory(mem){ try{ localStorage.setItem(BANK_MEMORY_KEY, JSON.stringify(mem)); }catch(e){} }
+
+// Normalize helper
+function norm(s){ return (s||'').toString().toLowerCase().replace(/[^\w\u0400-\u04FF]+/g,' ').trim(); }
+function tokens(s){ return norm(s).split(/\s+/).filter(Boolean); }
+
+// Built-in bank map (value -> option value will be matched later)
+const BUILT_IN = {
+  "уралсиб": "uralsib",
+  "втб": "vtb",
+  "сбер": "sberbank",
+  "сбербанк": "sberbank",
+  "дом рф": "domrf",
+  "дом.рф": "domrf",
+  "газпром": "gazprombank",
+  "газпромбанк": "gazprombank",
+  "альфа": "alfabank",
+  "альфа-банк": "alfabank",
+  "совком": "sovcombank",
+  "совкомбанк": "sovcombank",
+  "росбанк": "rosbank",
+  "открытие": "otkritie",
+  "почта": "pochtabank",
+  "псб": "psb",
+  "тинькофф": "tinkoff",
+  "мкб": "mkb",
+  "гпб": "gpbank"
+};
+
+function detectBankFromText(text){
+  if(!text) return '';
+  const mem = loadBankMemory();
+  const lower = norm(text);
+  // 1. check memory exact keys
+  for(const k of Object.keys(mem)){
+    if(lower.includes(k)) return mem[k];
+  }
+  // 2. built-in keys
+  for(const k of Object.keys(BUILT_IN)){
+    if(lower.includes(k)) return BUILT_IN[k];
+  }
+  // 3. token heuristic: look for any token that equals beginning of bank names
+  const tks = tokens(text);
+  for(const tk of tks){
+    if(BUILT_IN[tk]) return BUILT_IN[tk];
+  }
+  return '';
+}
+
+// Robustly set select by matching option text or value fragments
+function setSelectByBankKey(selectEl, bankKey){
+  if(!selectEl || !bankKey) return false;
+  const bk = norm(bankKey);
+  // try exact value match
+  for(let i=0;i<selectEl.options.length;i++){
+    const opt = selectEl.options[i];
+    if(!opt) continue;
+    const v = norm(opt.value);
+    if(v === bk || v.includes(bk) || bk.includes(v)){
+      selectEl.selectedIndex = i; selectEl.value = opt.value; selectEl.dispatchEvent(new Event('change',{bubbles:true})); return true;
+    }
+  }
+  // match by text
+  for(let i=0;i<selectEl.options.length;i++){
+    const opt = selectEl.options[i];
+    const t = norm(opt.text || opt.value || '');
+    if(t.includes(bk) || bk.includes(t)){
+      selectEl.selectedIndex = i; selectEl.value = opt.value; selectEl.dispatchEvent(new Event('change',{bubbles:true})); return true;
+    }
+  }
+  // token intersection
+  const bankToks = tokens(bankKey);
+  for(let i=0;i<selectEl.options.length;i++){
+    const opt = selectEl.options[i];
+    const optToks = tokens(opt.text || opt.value || '');
+    for(const bt of bankToks){
+      if(optToks.includes(bt)){ selectEl.selectedIndex = i; selectEl.value = opt.value; selectEl.dispatchEvent(new Event('change',{bubbles:true})); return true; }
+    }
+  }
+  return false;
+}
+
+// Save association from rawToken -> bankKey for future
+function learnBankMapping(rawText, bankKey){
+  try{
+    if(!rawText || !bankKey) return;
+    const mem = loadBankMemory();
+    const lower = norm(rawText);
+    // choose representative token: longest token in text that is a substring of bankKey or vice versa
+    const tks = tokens(rawText);
+    let chosen = '';
+    for(const tk of tks){
+      if(bankKey.includes(tk) || tk.length>chosen.length) chosen = tk;
+    }
+    if(chosen) mem[chosen] = bankKey;
+    saveBankMemory(mem);
+    console.log('GPT-admin: learned mapping', chosen, '→', bankKey);
+  }catch(e){ console.warn(e); }
+}
+
+// Fill fields helper: tries many selectors then specific ids
+function trySet(idOrSelector, value){
+  if(value===null || value===undefined) return false;
+  try{
+    let el = document.querySelector(idOrSelector);
+    if(!el && idOrSelector[0] !== '#') el = document.querySelector('#' + idOrSelector);
+    if(!el) return false;
+    const tag = el.tagName.toLowerCase();
+    if(tag==='select' || tag==='input' || tag==='textarea'){
+      el.focus();
+      el.value = value;
+      el.dispatchEvent(new Event('input',{bubbles:true}));
+      el.dispatchEvent(new Event('change',{bubbles:true}));
+      return true;
+    } else {
+      el.innerText = value; return true;
+    }
+  }catch(e){ console.warn('trySet err', e); return false; }
+}
+
+// main pipeline executed when clicking autofill
+async function autofillPipeline(text){
+  const statusEl = document.getElementById('gpt-status');
+  if(statusEl) statusEl.textContent = 'Статус: обработка...';
+  let parsed = {};
+  // 1) try server parse (non-blocking but prefer)
+  try{
+    const res = await fetch(typeof PARSE_ENDPOINT !== 'undefined' ? PARSE_ENDPOINT : '/parse', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text})
+    });
+    if(res && res.ok){
+      const j = await res.json();
+      parsed = j && j.data ? j.data : {};
+    }
+  }catch(e){
+    console.warn('parse server error', e);
+  }
+  // 2) local detection + merge
+  const localBank = detectBankFromText(text);
+  if(localBank && !parsed.bank) parsed.bank = localBank;
+  // also extract simple patterns (dates, numbers, 'жен' 'муж' 'ж' 'м', 'ставка X')
+  // birth date regex dd.mm.yyyy or yyyy-mm-dd
+  const birthMatch = text.match(/(\d{2}[.\-/]\d{2}[.\-/]\d{4})/);
+  if(birthMatch && !parsed.birth) parsed.birth = birthMatch[1];
+  const rateMatch = text.match(/ставк[aа]\s*[:\- ]*\s*(\d+[.,]?\d*)/i);
+  if(rateMatch && !parsed.rate) parsed.rate = rateMatch[1].replace(',', '.');
+  if(/жен|ж\W|female/i.test(text) && !parsed.gender) parsed.gender = 'female';
+  if(/муж|м\W|male/i.test(text) && !parsed.gender) parsed.gender = 'male';
+  // loan sum digits (в конце или with spaces)
+  const loanMatch = text.match(/(\d{5,12})/g);
+  if(loanMatch && !parsed.loan){
+    // pick largest number as loan
+    const nums = loanMatch.map(x=>Number(x.replace(/[^\d]/g,'')));
+    parsed.loan = Math.max(...nums);
+  }
+
+  console.log('Autofill parsed:', parsed);
+
+  // 3) set bank robustly first so downstream logic (like bankMarkup) can work
+  const bankSelect = document.querySelector('#bank');
+  if(parsed.bank){
+    const setOk = setSelectByBankKey(bankSelect, parsed.bank) || setSelectByBankKey(bankSelect, parsed.bank.toString());
+    if(!setOk){
+      // try direct string
+      setSelectByBankKey(bankSelect, parsed.bank.toString());
+    } else {
+      // learn mapping from raw text to this bank key
+      learnBankMapping(text, parsed.bank);
+    }
+  } else {
+    // no bank found, try tokens heuristics
+    const cand = detectBankFromText(text);
+    if(cand){ setSelectByBankKey(bankSelect, cand); learnBankMapping(text, cand); parsed.bank = cand; }
+  }
+
+  // small wait to let DOM settle
+  await new Promise(r=>setTimeout(r, 220));
+
+  // 4) fill other fields by id
+  if(parsed.loan) trySet('#loan', parsed.loan);
+  if(parsed.birth) trySet('#birth', parsed.birth);
+  if(parsed.start) trySet('#start', parsed.start);
+  if(parsed.gender) trySet('#gender', parsed.gender);
+  if(parsed.propType) trySet('#propType', parsed.propType);
+  // check flags
+  if(parsed.life || /жизн/i.test(text)) trySet('#life', true);
+  if(parsed.prop || /имуще/i.test(text)) trySet('#prop', true);
+  if(parsed.title || /титул|титул/i.test(text)) trySet('#title', true);
+
+  // market/land values if present
+  const moneyMatch = text.match(/(\d{1,3}(?:[ \u00A0]\d{3})*(?:[.,]\d+)?)/);
+  if(moneyMatch && !parsed.marketHouse){
+    const m = moneyMatch[1].replace(/\s/g,'').replace(',','.');
+    trySet('#marketHouse', m);
+  }
+
+  // 5) save locally mapping and raw example
+  try{
+    const memExamples = JSON.parse(localStorage.getItem('gpt_autofill_examples_v1')||'[]');
+    memExamples.push({text, parsed, ts: new Date().toISOString()});
+    localStorage.setItem('gpt_autofill_examples_v1', JSON.stringify(memExamples.slice(-300)));
+  }catch(e){}
+
+  // final small wait and trigger calculate
+  await new Promise(r=>setTimeout(r, 380));
+  const calcBtn = Array.from(document.querySelectorAll('button')).find(b=>/(рассчит|calculate|расчитыв)/i.test(b.innerText || b.value || '')) || document.getElementById('calc');
+  if(calcBtn){ try{ calcBtn.click(); console.log('Calc clicked by autofill pipeline'); }catch(e){ console.warn(e); } }
+  if(statusEl) statusEl.textContent = 'Готово: автозаполнено';
+}
+
+// attach to admin autofill button
+(function attach(){
+  const autofillBtn = document.getElementById('gpt-autofill-btn') || document.querySelector('[id^="gpt-autofill"]');
+  if(!autofillBtn){
+    console.warn('autofill v7: button not found');
+    return;
+  }
+  autofillBtn.addEventListener('click', async (ev)=>{
+    // get client text
+    const clientText = document.getElementById('gpt-client-text') || document.querySelector('#gpt-client-text');
+    const text = clientText ? clientText.value : '';
+    // run pipeline (ensure runs after any existing handlers)
+    setTimeout(()=>{ autofillPipeline(text); }, 150);
+  });
+})();
+</script>
+
 </body>
 </html>
