@@ -1,33 +1,46 @@
 """
-server_fixed4.py — универсальный сервер для проверки расчётов
-Совместим с фронтендом v40 (где payload не содержит client_total/server_total).
+server_fixed2.py
+Версия с поддержкой /parse (GPT-5) для автоматического распознавания текста клиентов.
+Остальные маршруты ("/check", "/admin/logs") не изменены.
 """
-import os, json, datetime
+
+import os
+import json
+import datetime
 from typing import Any, Dict, List, Optional, Union
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from openai import OpenAI
 
+# ======================================================
+# 🧠 НАСТРОЙКИ
+# ======================================================
 LOG_FILE = "gpt_check_log.json"
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "1996")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+# Инициализация клиента OpenAI
 client = None
 if OPENAI_API_KEY:
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
+        print("✅ OpenAI client initialized")
     except Exception as e:
         print("⚠️ OpenAI init failed:", e)
 
-app = FastAPI(title="Insurance Calculator Checker (server_fixed4)")
+app = FastAPI(title="Ingosstrakh Calculator Server")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_credentials=True,
     allow_methods=["*"], allow_headers=["*"]
 )
+
+# ======================================================
+# 📦 МОДЕЛИ ДАННЫХ
+# ======================================================
 
 class LineItem(BaseModel):
     label: str
@@ -41,23 +54,31 @@ class CheckRequest(BaseModel):
     lines: Optional[List[LineItem]] = None
     client_debug: Optional[Dict[str, Any]] = None
 
+
+# ======================================================
+# 🧩 УТИЛИТЫ
+# ======================================================
+
 def save_log(entry):
     try:
         logs = []
         if os.path.exists(LOG_FILE):
             with open(LOG_FILE, "r", encoding="utf-8") as f:
-                try: logs = json.load(f)
-                except: logs = []
+                try:
+                    logs = json.load(f)
+                except:
+                    logs = []
         logs.append(entry)
         with open(LOG_FILE, "w", encoding="utf-8") as f:
             json.dump(logs, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print("❌ Log write failed:", e)
 
+
 def normalize_request(req: Dict[str, Any]) -> Dict[str, Any]:
-    """Convert both new and old payload formats into standard CheckRequest-like dict."""
+    """Приводит payload к стандартному виду CheckRequest."""
     if "client_total" in req and "server_total" in req and "lines" in req:
-        return req  # already correct
+        return req  # формат уже нормализован
     dbg = req.get("client_debug") or {}
     lines = dbg.get("lines") or []
     client_total = 0.0
@@ -71,7 +92,9 @@ def normalize_request(req: Dict[str, Any]) -> Dict[str, Any]:
         "client_debug": dbg
     }
 
+
 def call_gpt(payload):
+    """Вспомогательная функция проверки расчёта через GPT-4o-mini."""
     if client is None:
         return {"error": "OpenAI client not initialized (OPENAI_API_KEY missing)."}
     prompt = (
@@ -98,55 +121,84 @@ def call_gpt(payload):
     except Exception as e:
         return {"error": str(e)}
 
+
+# ======================================================
+# 🌐 МАРШРУТЫ API
+# ======================================================
+
 @app.get("/")
 async def root():
-    return {"status": "ok", "message": "server_fixed4 running"}
+    return {"status": "ok", "message": "server_fixed2 running"}
+
 
 @app.post("/check")
 async def check(req: Dict[str, Any]):
+    """Проверка расчёта через GPT-4o-mini (осталось как было)."""
     norm = normalize_request(req)
-    entry = {"timestamp": datetime.datetime.utcnow().isoformat()+"Z", "request": norm}
+    entry = {"timestamp": datetime.datetime.utcnow().isoformat() + "Z", "request": norm}
     gpt_result = call_gpt(norm)
     entry["result"] = gpt_result
     save_log(entry)
     return JSONResponse(content={"ok": True, "data": gpt_result})
 
+
 @app.get("/admin/logs")
 async def admin_logs(password: Optional[str] = Query(None)):
+    """Просмотр логов (доступ с паролем)."""
     if password != ADMIN_PASSWORD:
         raise HTTPException(status_code=403, detail="Forbidden")
     if not os.path.exists(LOG_FILE):
         return {"logs": []}
     with open(LOG_FILE, "r", encoding="utf-8") as f:
-        try: logs = json.load(f)
-        except: logs = []
+        try:
+            logs = json.load(f)
+        except:
+            logs = []
     return {"logs": logs}
 
+
 # ======================================================
-# 🧠 Новый маршрут /parse — распознаёт текст клиента (GPT-5)
+# 🧠 НОВЫЙ /parse — распознаёт текст клиента через GPT-5
 # ======================================================
+
+MANUAL_RATE_BANKS = ["альфа", "альфабанк", "альфа банк", "убрир", "у б р и р", "ubrir"]
+
 @app.post("/parse")
 async def parse_text(req: Request):
-    try:
-        if client is None:
-            raise HTTPException(status_code=500, detail="OpenAI client not initialized")
+    """Распознаёт текст клиента и возвращает структурированный JSON."""
+    if client is None:
+        raise HTTPException(status_code=500, detail="OpenAI client not initialized")
 
+    try:
         data = await req.json()
-        text = data.get("text", "")
+        text = data.get("text", "").strip()
         if not text:
             raise HTTPException(status_code=400, detail="Нет текста")
 
         prompt = f"""
-Ты помощник ипотечного калькулятора. Из текста клиента выдели:
-- банк (строка)
-- сумму кредита (в рублях, числом)
+Ты работаешь в страховом калькуляторе. 
+Из текста клиента выдели строго следующие данные:
+- банк (bank)
+- сумму кредита (loan)
 - пол ("male" или "female")
-- дату рождения (в формате YYYY-MM-DD)
-- тип имущества (apartment | house | townhouse)
-- материал (stone | wood)
-Верни только JSON, без комментариев.
+- дату рождения (birth, формат YYYY-MM-DD)
+- тип недвижимости (propType: house, apartment, townhouse)
+- материал (material: stone, wood, gas)
+- год постройки (year)
+Если банк в списке [{', '.join(MANUAL_RATE_BANKS)}], то также найди процент (rate, float).
+Игнорируй всё остальное: "жизнь", "имущ", "газ", "ип", "гп", "скидка", "страховка" и т.п.
+Ответь строго JSON без комментариев и текста.
 Пример:
-{{"bank":"ДОМ.РФ","loan":5157198,"gender":"female","birth":"1991-03-06","propType":"house","material":"stone"}}
+{{
+  "bank": "Альфа-Банк",
+  "loan": 3588000,
+  "gender": "male",
+  "birth": "1989-02-02",
+  "propType": "apartment",
+  "material": "stone",
+  "year": 2025,
+  "rate": 6.0
+}}
 
 Текст клиента:
 {text}
@@ -162,8 +214,12 @@ async def parse_text(req: Request):
         try:
             parsed = json.loads(raw)
         except Exception:
-            return JSONResponse(content={"error": "GPT-5 вернул невалидный JSON", "raw": raw}, status_code=500)
+            return JSONResponse(
+                content={"error": "GPT-5 вернул невалидный JSON", "raw": raw},
+                status_code=500
+            )
 
         return JSONResponse(content=parsed)
+
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
