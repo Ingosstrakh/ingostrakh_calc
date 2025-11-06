@@ -430,7 +430,7 @@ function getBasePercentForBank(bank, age, gender){
 }
 function calcClick(){
   const loan = Number(document.getElementById('loan').value) || 0;
-  const bank = bankEl.value;
+  const bank = (bankEl.value||'').toString().trim();
   const propChecked = document.getElementById('prop').checked;
   const titleChecked = document.getElementById('title').checked;
   const lifeChecked = document.getElementById('life').checked;
@@ -448,7 +448,7 @@ function calcClick(){
 }
 function proceedCalculation(fromModal){
   const loan = Number(document.getElementById('loan').value) || 0;
-  const bank = bankEl.value;
+  const bank = (bankEl.value||'').toString().trim();
   const propChecked = document.getElementById('prop').checked;
   const titleChecked = document.getElementById('title').checked;
   const lifeChecked = document.getElementById('life').checked;
@@ -996,13 +996,18 @@ document.addEventListener('DOMContentLoaded', function(){
         if(tag === 'select'){
           // try match option by text or value
           const v = String(value).toLowerCase();
-          for(const opt of el.options){
+          let found=false;
+          for(let i=0;i<el.options.length;i++){
+            const opt = el.options[i];
             if((opt.text||'').toLowerCase().includes(v) || (opt.value||'').toLowerCase() === v){
+              el.selectedIndex = i;
               el.value = opt.value;
               el.dispatchEvent(new Event('change',{bubbles:true}));
-              return true;
+              found = true;
+              break;
             }
           }
+          if(found) return true;
           // fallback set
           el.value = value;
           el.dispatchEvent(new Event('change',{bubbles:true}));
