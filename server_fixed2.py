@@ -1,14 +1,13 @@
 """
 server_fixed2.py
-Версия с поддержкой /parse (GPT-5) для автоматического распознавания текста клиентов.
-Остальные маршруты ("/check", "/admin/logs") не изменены.
+Версия 2.1 — добавлен ParseRequest для корректного отображения Request body в Swagger UI.
 """
 
 import os
 import json
 import datetime
 from typing import Any, Dict, List, Optional, Union
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -30,7 +29,7 @@ if OPENAI_API_KEY:
     except Exception as e:
         print("⚠️ OpenAI init failed:", e)
 
-app = FastAPI(title="Ingosstrakh Calculator Server")
+app = FastAPI(title="Ingosstrakh Calculator Server", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,6 +53,8 @@ class CheckRequest(BaseModel):
     lines: Optional[List[LineItem]] = None
     client_debug: Optional[Dict[str, Any]] = None
 
+class ParseRequest(BaseModel):
+    text: str  # 👈 теперь Swagger знает, что сюда вставлять
 
 # ======================================================
 # 🧩 УТИЛИТЫ
@@ -78,7 +79,7 @@ def save_log(entry):
 def normalize_request(req: Dict[str, Any]) -> Dict[str, Any]:
     """Приводит payload к стандартному виду CheckRequest."""
     if "client_total" in req and "server_total" in req and "lines" in req:
-        return req  # формат уже нормализован
+        return req
     dbg = req.get("client_debug") or {}
     lines = dbg.get("lines") or []
     client_total = 0.0
@@ -128,7 +129,7 @@ def call_gpt(payload):
 
 @app.get("/")
 async def root():
-    return {"status": "ok", "message": "server_fixed2 running"}
+    return {"status": "ok", "message": "server_fixed2.py v2.1 running"}
 
 
 @app.post("/check")
@@ -164,18 +165,16 @@ async def admin_logs(password: Optional[str] = Query(None)):
 MANUAL_RATE_BANKS = ["альфа", "альфабанк", "альфа банк", "убрир", "у б р и р", "ubrir"]
 
 @app.post("/parse")
-async def parse_text(req: Request):
+async def parse_text(data: ParseRequest):
     """Распознаёт текст клиента и возвращает структурированный JSON."""
     if client is None:
         raise HTTPException(status_code=500, detail="OpenAI client not initialized")
 
-    try:
-        data = await req.json()
-        text = data.get("text", "").strip()
-        if not text:
-            raise HTTPException(status_code=400, detail="Нет текста")
+    text = data.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Нет текста")
 
-        prompt = f"""
+    prompt = f"""
 Ты работаешь в страховом калькуляторе. 
 Из текста клиента выдели строго следующие данные:
 - банк (bank)
@@ -186,24 +185,13 @@ async def parse_text(req: Request):
 - материал (material: stone, wood, gas)
 - год постройки (year)
 Если банк в списке [{', '.join(MANUAL_RATE_BANKS)}], то также найди процент (rate, float).
-Игнорируй всё остальное: "жизнь", "имущ", "газ", "ип", "гп", "скидка", "страховка" и т.п.
-Ответь строго JSON без комментариев и текста.
-Пример:
-{{
-  "bank": "Альфа-Банк",
-  "loan": 3588000,
-  "gender": "male",
-  "birth": "1989-02-02",
-  "propType": "apartment",
-  "material": "stone",
-  "year": 2025,
-  "rate": 6.0
-}}
-
+Игнорируй всё остальное.
+Ответь строго JSON.
 Текст клиента:
 {text}
 """
 
+    try:
         resp = client.chat.completions.create(
             model="gpt-5",
             messages=[{"role": "user", "content": prompt}],
