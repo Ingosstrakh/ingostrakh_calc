@@ -655,127 +655,6 @@ const rshbMaleWithDis = {18:0.217,19:0.237,20:0.256,21:0.276,22:0.295,23:0.314,2
 const rshbFemaleNoDis = {18:0.091,19:0.091,20:0.092,21:0.093,22:0.093,23:0.094,24:0.095,25:0.095,26:0.096,27:0.097,28:0.097,29:0.098,30:0.109,31:0.126,32:0.142,33:0.152,34:0.162,35:0.173,36:0.183,37:0.193,38:0.206,39:0.220,40:0.233,41:0.246,42:0.259,43:0.291,44:0.322,45:0.354,46:0.385,47:0.417,48:0.462,49:0.507,50:0.552,51:0.598,52:0.643,53:0.721,54:0.799,55:0.876,56:0.954,57:1.032,58:1.110,59:1.188,60:1.266,61:1.344,62:1.422,63:1.499,64:1.577};
 const rshbFemaleWithDis = {18:0.166,19:0.168,20:0.168,21:0.17,22:0.171,23:0.172,24:0.173,25:0.174,26:0.175,27:0.177,28:0.178,29:0.179,30:0.2,31:0.23,32:0.26,33:0.278,34:0.297,35:0.316,36:0.335,37:0.354,38:0.378,39:0.402,40:0.426,41:0.45,42:0.475,43:0.533,44:0.591,45:0.648,46:0.706,47:0.764,48:0.846,49:0.929,50:1.012,51:1.094,52:1.177,53:1.32,54:1.462,55:1.605,56:1.748,57:1.891,58:2.033,59:2.176,60:2.318,61:2.46,62:2.604,63:2.746,64:2.889};
 
-/* ========== Admin UI (restored as in original) ========== */
-document.addEventListener('DOMContentLoaded', function(){
-  try{
-    // Insert admin controls next to calc/clear
-    const calcWrap = document.getElementById('calc').parentNode;
-
-    const adminWrap = document.createElement('div');
-    adminWrap.id = 'assistantAdminWrap';
-    adminWrap.style.marginTop = '10px';
-    adminWrap.style.display = 'flex';
-    adminWrap.style.alignItems = 'center';
-    adminWrap.style.gap = '8px';
-    adminWrap.style.flexWrap = 'wrap';
-
-    const adminInput = document.createElement('input');
-    adminInput.id = 'adminCodeInput';
-    adminInput.placeholder = 'Код админа';
-    adminInput.style.padding='6px';
-    adminInput.style.width='120px';
-    adminInput.autocomplete = 'off';
-
-    const adminBtn = document.createElement('button');
-    adminBtn.id = 'adminLoginBtn';
-    adminBtn.textContent = 'Войти';
-    adminBtn.className = 'btn secondary';
-
-    const adminCheckBtn = document.createElement('button');
-    adminCheckBtn.id = 'adminCheckBtn';
-    adminCheckBtn.textContent = '🧠 Проверить у GPT-5';
-    adminCheckBtn.className = 'btn';
-    adminCheckBtn.style.display='none';
-    adminCheckBtn.style.marginLeft='8px';
-
-    const adminNotice = document.createElement('div');
-    adminNotice.id = 'adminNotice';
-    adminNotice.style.display='none';
-    adminNotice.style.color='#cfe9ff';
-    adminNotice.style.fontSize='13px';
-    adminNotice.style.marginLeft='8px';
-
-    const adminDebug = document.createElement('pre');
-    adminDebug.id = 'adminDebug';
-    adminDebug.style.display='none';
-    adminDebug.style.background='#fff';
-    adminDebug.style.color='#000';
-    adminDebug.style.padding='8px';
-    adminDebug.style.maxHeight='300px';
-    adminDebug.style.overflow='auto';
-    adminDebug.style.width='100%';
-
-    adminWrap.appendChild(adminInput);
-    adminWrap.appendChild(adminBtn);
-    adminWrap.appendChild(adminCheckBtn);
-    adminWrap.appendChild(adminNotice);
-
-    calcWrap.appendChild(adminWrap);
-    calcWrap.parentNode.appendChild(adminDebug);
-
-    adminBtn.addEventListener('click', ()=> {
-      const code = adminInput.value.trim();
-      if(code === 'INGO'){
-        adminCheckBtn.style.display='inline-block';
-        adminNotice.style.display='inline-block';
-        adminNotice.textContent = 'Админ-режим: активирован';
-        adminDebug.style.display='block';
-        alert('Админ-режим активирован');
-        const debugWrap = document.getElementById('debugWrap');
-        if(debugWrap) debugWrap.style.display = 'block';
-      } else {
-        alert('❌ Неверный код доступа');
-      }
-    });
-
-    adminCheckBtn.addEventListener('click', async ()=>{
-      adminNotice.textContent = 'Отправка на сервер проверки...';
-      const calcBtn = document.getElementById('calc');
-      if(calcBtn) calcBtn.click();
-      await new Promise(r=>setTimeout(r,250));
-      let dbgEl = document.getElementById('debugBox') || document.getElementById('debug');
-      let dbgObj = null;
-      if(dbgEl){
-        try{ dbgObj = JSON.parse(dbgEl.textContent); } catch(e){ dbgObj = null; }
-      }
-      const payload = {
-        bank: (document.getElementById('bank') && document.getElementById('bank').value) || null,
-        loan: Number(document.getElementById('loan') && document.getElementById('loan').value) || 0,
-        birth: document.getElementById('birth') ? document.getElementById('birth').value : null,
-        start: document.getElementById('start') ? document.getElementById('start').value : null,
-        gender: (document.getElementById('gender') && document.getElementById('gender').value) || null,
-        propChecked: document.getElementById('prop') ? document.getElementById('prop').checked : false,
-        titleChecked: document.getElementById('title') ? document.getElementById('title').checked : false,
-        lifeChecked: document.getElementById('life') ? document.getElementById('life').checked : false,
-        propType: document.getElementById('propType') ? document.getElementById('propType').value : 'apartment',
-        material: window.chosenMaterial || 'stone',
-        discount: document.getElementById('lifeDiscount') ? document.getElementById('lifeDiscount').checked : false,
-        client_debug: dbgObj
-      };
-      try{
-        const res = await fetch('https://ingostrakh-calc.onrender.com/check',{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify(payload)
-        });
-        if(!res.ok) throw new Error('Server returned ' + res.status);
-        const data = await res.json();
-        if(data.match){
-          adminNotice.textContent = '✅ GPT подтвердил расчёт';
-          adminDebug.textContent = JSON.stringify(data, null, 2);
-        } else {
-          adminNotice.textContent = '❌ GPT не подтвердил расчёт — подробности в логах сервера';
-          adminDebug.textContent = JSON.stringify(data, null, 2);
-        }
-      }catch(err){
-        adminNotice.textContent = 'Ошибка проверки: ' + err.message;
-      }
-    });
-
-  }catch(err){
-    console.warn('Admin UI init failed', err);
-  }
-});
 </script>
 
 
@@ -1719,5 +1598,261 @@ async function autofillPipeline(text){
 })();
 </script>
 
+
+<!-- v9_fixed: Force-realistic bank selection and expanded synonyms -->
+<script>
+(function(){
+  // Expanded synonyms map for robust detection
+  const SYNONYMS = [
+    ['уралсиб','урал сиб','уралсиб банк','уралсибр','уралсиб рт'],
+    ['втб','в т б','втб банк'],
+    ['сбер','сбербанк','сб'],
+    ['альфа','альфа банк','альфабанк','альфa'],
+    ['дом рф','дом.рф','домрф','домрф банк'],
+    ['псб','псб банк','промсвязь'],
+    ['мкб','мкб банк'],
+    ['юникредит','юни кредит','юникредит банк'],
+    ['россельхозбанк','россельхоз','рсхб','рсхб банк'],
+    ['райффайзен','райф','райфайзенбанк','райфа'],
+    ['зeнит','зенит','зенит банк','зенитбанк'],
+    ['мтс банк','мтс'],
+    ['тктб','ткб','т к б','т к б банк','ткб банк'],
+    ['транскапитал','транскапитал','ткапитал']
+  ];
+
+  function norm(s){ return (s||'').toString().toLowerCase().replace(/[^\w\u0400-\u04FF]+/g,' ').trim(); }
+  function tokens(s){ return norm(s).split(/\s+/).filter(Boolean); }
+
+  // simulate real user interaction with select element
+  function simulateSelectUserAction(selectEl, optionIndex){
+    try{
+      if(!selectEl) return false;
+      selectEl.focus();
+      // dispatch mousedown on select
+      selectEl.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true}));
+      // set selected index
+      if(optionIndex < 0 || optionIndex >= selectEl.options.length) return false;
+      selectEl.selectedIndex = optionIndex;
+      // set value explicitly
+      selectEl.value = selectEl.options[optionIndex].value || selectEl.options[optionIndex].text;
+      // dispatch input and change
+      selectEl.dispatchEvent(new Event('input', {bubbles:true}));
+      selectEl.dispatchEvent(new Event('change', {bubbles:true}));
+      // small pause then blur
+      setTimeout(()=>{ 
+        try{ selectEl.dispatchEvent(new MouseEvent('mouseup', {bubbles:true})); }catch(e){}
+        try{ selectEl.blur(); }catch(e){}
+      }, 30);
+      return true;
+    }catch(e){ console.warn('simulateSelectUserAction error', e); return false; }
+  }
+
+  // Try to set bank by matching option text with a candidate token
+  function setBankByCandidateText(candidate){
+    if(!candidate) return false;
+    const sel = document.querySelector('#bank') || document.querySelector('select[id*="bank"]') || document.querySelector('select[name*="bank"]');
+    if(!sel) return false;
+    const candNorm = norm(candidate);
+    // first, try exact contains on option text
+    for(let i=0;i<sel.options.length;i++){
+      const opt = sel.options[i];
+      const t = norm(opt.text || opt.value || '');
+      if(t.includes(candNorm) || candNorm.includes(t)){
+        return simulateSelectUserAction(sel, i);
+      }
+    }
+    // token intersection
+    const candToks = tokens(candidate);
+    for(let i=0;i<sel.options.length;i++){
+      const opt = sel.options[i];
+      const optToks = tokens(opt.text || opt.value || '');
+      for(const tk of candToks){
+        if(optToks.includes(tk)){
+          return simulateSelectUserAction(sel, i);
+        }
+      }
+    }
+    return false;
+  }
+
+  // Try to detect bank by scanning synonyms list against text
+  function detectBankFromTextExpanded(text){
+    if(!text) return '';
+    const lower = norm(text);
+    // scan synonyms groups in order
+    for(const group of SYNONYMS){
+      for(const syn of group){
+        if(lower.indexOf(norm(syn)) !== -1){
+          // return the canonical group first token
+          return group[0];
+        }
+      }
+    }
+    // fallback: try any option token
+    const sel = document.querySelector('#bank');
+    if(sel){
+      const bankOptions = Array.from(sel.options).map(o=>o.text || o.value || '');
+      for(const opt of bankOptions){
+        const optNorm = norm(opt);
+        if(lower.indexOf(optNorm) !== -1 && optNorm.length>1) return opt;
+      }
+    }
+    return '';
+  }
+
+  // Main override handler attached to admin autofill button
+  function attachV9(){
+    const btn = document.getElementById('gpt-autofill-btn') || document.querySelector('[id^="gpt-autofill"]');
+    if(!btn){ console.warn('v9: autofill button not found'); return; }
+    btn.addEventListener('click', async function(ev){
+      ev.preventDefault();
+      const ta = document.getElementById('gpt-client-text');
+      const statusEl = document.getElementById('gpt-status');
+      if(statusEl) statusEl.textContent = 'Статус: попытка автоподстановки банка...';
+      const txt = ta ? ta.value || '' : '';
+      if(!txt || txt.trim()===''){ if(statusEl) statusEl.textContent='Статус: вставьте текст клиента'; return; }
+
+      // 1) try server parse first (if available) by reusing existing callParseServer if present
+      let parsed = null;
+      if(typeof callParseServer === 'function'){
+        try{
+          parsed = await callParseServer(txt);
+        }catch(e){
+          parsed = null;
+        }
+      }
+
+      // 2) if server returned bankCandidate, try to set it directly
+      let bankSet = false;
+      const candidates = [];
+      if(parsed && parsed.bank) candidates.push(parsed.bank);
+      if(parsed && parsed.bank_name) candidates.push(parsed.bank_name);
+      // also include local expanded detection
+      const det = detectBankFromTextExpanded(txt);
+      if(det) candidates.push(det);
+      // also push raw tokens from text that look like bank tokens (first few words)
+      const rawToks = txt.split(/\s+/).slice(0,6);
+      for(const r of rawToks) candidates.push(r);
+
+      // attempt to set bank by candidates one by one
+      for(const c of candidates){
+        if(!c) continue;
+        bankSet = setBankByCandidateText(c);
+        if(bankSet) break;
+      }
+
+      // 3) if still not set, try full-scan synonyms
+      if(!bankSet){
+        const expanded = detectBankFromTextExpanded(txt);
+        if(expanded){
+          bankSet = setBankByCandidateText(expanded);
+        }
+      }
+
+      // 4) if still not set, try direct option-text substring matching
+      if(!bankSet){
+        const sel = document.querySelector('#bank');
+        if(sel){
+          const lower = norm(txt);
+          for(let i=0;i<sel.options.length;i++){
+            const opt = sel.options[i];
+            const optNorm = norm(opt.text || opt.value || '');
+            if(optNorm.length>1 && lower.indexOf(optNorm) !== -1){
+              bankSet = simulateSelectUserAction(sel, i);
+              if(bankSet) break;
+            }
+          }
+        }
+      }
+
+      // small wait
+      await new Promise(r=>setTimeout(r, 300));
+
+      // check if bank actually set
+      const bankEl = document.querySelector('#bank');
+      if(bankEl && bankEl.value && bankEl.value.toString().trim() !== ''){
+        if(statusEl) statusEl.textContent = 'Статус: банк подставлен: ' + (bankEl.selectedOptions[0].text || bankEl.value);
+      } else {
+        if(statusEl) statusEl.textContent = 'Статус: банк не найден — проверьте вручную';
+      }
+
+      // proceed with existing autofillPipeline if present, else trigger the original pipeline via clickCalculate logic
+      if(typeof autofillPipeline === 'function'){
+        try{ await autofillPipeline(txt); }catch(e){ console.warn(e); }
+      } else if(typeof runAutofill === 'function'){
+        try{ await runAutofill(txt); }catch(e){ console.warn(e); }
+      } else {
+        // last resort: try to click calc after small delay
+        await new Promise(r=>setTimeout(r, 400));
+        const calcBtn = document.getElementById('calc');
+        if(calcBtn) calcBtn.click();
+      }
+    }, {passive:false});
+    console.log('v9_fixed attached');
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', attachV9);
+  } else {
+    attachV9();
+  }
+
+  // expose helpers for debugging in console
+  window.__gpt_v9_fixed = { detectBankFromTextExpanded, setBankByCandidateText, simulateSelectUserAction };
+})();
+</script>
+
+<script>
+(function installDOMRFWrapper(){
+    const tryInstall = ()=>{
+      if(typeof getBasePercentForBank === 'function' && !getBasePercentForBank.__assistant_wrapped){
+        const orig = getBasePercentForBank;
+        getBasePercentForBank = function(bank, age, gender){
+          try{
+            if(bank === 'ДОМ.РФ' && age !== null && age >=21 && age <=64){
+              if(gender === 'female'){
+                if(typeof domrfFemale !== 'undefined' && domrfFemale[age] !== undefined) return domrfFemale[age];
+              } else {
+                if(typeof domrfMale !== 'undefined' && domrfMale[age] !== undefined) return domrfMale[age];
+              }
+            }
+          }catch(e){}
+          return orig(bank, age, gender);
+        };
+        getBasePercentForBank.__assistant_wrapped = true;
+        try{
+          const bankEl = document.getElementById('bank');
+          if(bankEl && !bankEl.__assistant_event_attached){
+            bankEl.addEventListener('change', ()=> {
+              const b = bankEl.value;
+              const vtbRow = document.getElementById('vtbRow');
+              if(vtbRow) vtbRow.style.display = (b === 'ВТБ') ? 'block' : 'none';
+              const lifeDiscountWrap = document.getElementById('lifeDiscountWrap');
+              if(b === 'ДОМ.РФ' || b === 'Альфа Банк'){
+                const lifeDiscountEl = document.getElementById('lifeDiscount');
+                if(lifeDiscountEl){ lifeDiscountEl.checked=false; lifeDiscountEl.disabled=true; }
+                if(lifeDiscountWrap) lifeDiscountWrap.style.display = (document.getElementById('life').checked)?'block':'none';
+              } else {
+                const lifeDiscountEl = document.getElementById('lifeDiscount');
+                if(lifeDiscountEl) lifeDiscountEl.disabled=false;
+              }
+              if(b === 'Россельхозбанк'){
+                const modal = document.getElementById('modalRshb');
+                if(modal) modal.style.display = 'flex';
+              }
+              const propType = document.getElementById('propType');
+              const materialBlock = document.getElementById('materialBlock');
+              if(propType && materialBlock) materialBlock.style.display = (propType.value === 'house') ? 'block' : 'none';
+            });
+            bankEl.__assistant_event_attached = true;
+          }
+        }catch(e){}
+      } else {
+        setTimeout(tryInstall, 200);
+      }
+    };
+    tryInstall();
+  })();
+</script>
 </body>
 </html>
