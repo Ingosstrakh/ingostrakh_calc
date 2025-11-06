@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+
+<html lang="ru">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1" name="viewport"/>
+<title>Ипотечный калькулятор — v40 (co-borrowers + house/land)</title>
+<style>
+:root{--bg:#071229;--card:#0b2140;--accent:#2f8ef9;--muted:#9fb7d8;--ok:#c7f0df}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter, "Segoe UI", Roboto, Arial;background:linear-gradient(180deg,var(--bg),#021223);color:#e8f6ff}
+.container{max-width:1100px;margin:22px auto;padding:18px}
+.header{display:flex;gap:12px;align-items:center}
+.logo{width:56px;height:56px;border-radius:12px;background:linear-gradient(135deg,var(--accent),#1f6fe8);display:flex;align-items:center;justify-content:center;font-weight:800;color:#042b4a;font-size:28px}
+h1{margin:0;font-size:20px}
+.grid{display:grid;grid-template-columns:1fr 380px;gap:18px;margin-top:18px}
+.card{background:linear-gradient(180deg,var(--card),rgba(255,255,255,0.02));padding:18px;border-radius:12px;box-shadow:0 8px 36px rgba(0,0,0,0.45)}
+label{display:block;color:#cfe9ff;font-weight:600;margin-top:10px;font-size:14px}
+input,select,button,textarea{width:100%;padding:10px;border-radius:10px;background:transparent;border:1px solid rgba(255,255,255,0.06);color:#eaf6ff;outline:none;font-size:14px}
+.row{display:flex;gap:10px}
+.col{flex:1}
+.btn{background:linear-gradient(90deg,var(--accent),#2b7bff);border:none;color:#012;padding:12px;border-radius:10px;font-weight:700;cursor:pointer;box-shadow:0 8px 24px rgba(43,123,255,0.12)}
+.btn.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+.small{font-size:13px;color:var(--muted);margin-top:6px}
+.mat-row{display:flex;gap:10px;margin-top:10px}
+.mat{flex:1;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#eaf6ff;background:transparent}
+.mat.active{background:linear-gradient(90deg,rgba(47,142,249,0.12),rgba(47,142,249,0.08));border-color:rgba(47,142,249,0.36);box-shadow:inset 0 -2px 10px rgba(0,0,0,0.3)}
+.tooltip{position:relative;display:inline-block}
+.tooltip .tip{visibility:hidden;opacity:0;transition:opacity .16s;position:absolute;left:0;top:42px;background:#eaf6ff;color:#012;padding:12px;border-radius:8px;min-width:240px;box-shadow:0 10px 30px rgba(0,0,0,.45);z-index:30}
+.tooltip:hover .tip{visibility:visible;opacity:1}
+.modal-back{position:fixed;left:0;right:0;top:0;bottom:0;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:9999}
+.modal{background:#fff;border-radius:12px;padding:18px;max-width:760px;color:#012;max-height:86vh;overflow:auto}
+.result-line{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed rgba(255,255,255,0.03)}
+.debug{margin-top:12px;background:rgba(255,255,255,0.03);padding:10px;border-radius:8px;color:#cfe9ff;font-size:13px;display:none;white-space:pre-wrap;overflow:auto;max-height:260px}
+.ok-badge{display:inline-block;padding:6px 10px;border-radius:10px;background:var(--ok);color:#032;font-weight:700;margin-bottom:8px}
+.co-borrower{border-radius:8px;border:1px solid rgba(255,255,255,0.04);padding:10px;margin-top:10px;background:rgba(255,255,255,0.01)}
+.co-row{display:flex;gap:8px;align-items:center}
+.co-row input, .co-row select{flex:1}
+.small-muted{font-size:12px;color:#9fb7d8;margin-top:6px}
+.del-co{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:6px;border-radius:8px;color:#ffd2d2;cursor:pointer}
+.warn{color:#ffb3b3;margin-top:8px}
+@media(max-width:980px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="header">
+<div class="logo">И</div>
+<div>
+<h1>Ипотечный калькулятор — v40</h1>
+<div class="small">Добавлены созаемщики (до 3) и логика рыночной стоимости дома / земельного участка.</div>
+</div>
+</div>
+<div class="grid">
+<!-- LEFT FORM -->
+<div class="card">
+<label>Сумма кредита (руб)</label>
+<input id="loan" type="number" value="6000000"/>
+<div class="row">
+<div class="col">
+<label>Банк</label>
+<select id="bank">
+<option value="">Выберите банк</option>
+<option>Абсолют</option>
+<option>Ак Барс</option>
+<option>Альфа Банк</option>
+<option>ВТБ</option>
+<option>ДОМ.РФ</option>
+<option>Инвестторгбанк</option>
+<option>Металлинвестбанк</option>
+<option>МТС Банк</option>
+<option>ПСБ</option>
+<option>Райффайзенбанк</option>
+<option>Россельхозбанк</option>
+<option>Сбербанк</option>
+<option>УБРИР</option>
+<option>Уралсиб</option>
+<option>ЮниКредит</option>
+<option>Зенит</option>
+<option>ТКБ</option>
+<option>МКБ</option>
+</select>
+</div>
+<div class="col">
+<label>Надбавка к страхованию жизни</label>
+<input id="bankMarkup" placeholder="—" readonly=""/>
+</div>
+</div>
+
+<div id="vtbRow" style="display:none;margin-top:8px">
+<label>Дата выдачи кредита (для ВТБ)</label>
+<input id="vtbDate" type="date"/>
+<div class="small">Если дата выдачи ≤ 01.01.2025 — применяются старые тарифы ВТБ.</div>
+</div>
+
+<div class="row">
+<div class="col">
+<label>Дата рождения</label>
+<input id="birth" type="date"/>
+</div>
+<div class="col">
+<label>Дата начала страхования</label>
+<input id="start" type="date"/>
+</div>
+</div>
+
+<div class="small" id="ageInfo"></div>
+
+<label>Пол</label>
+<select id="gender">
+<option value="">Не указан</option>
+<option value="male">Мужчина</option>
+<option value="female">Женщина</option>
+</select>
+
+<label>Что страховать</label>
+<div style="display:flex;gap:12px;align-items:center">
+<label><input id="prop" type="checkbox"/> Имущество</label>
+<label><input id="title" type="checkbox"/> Титул</label>
+<label><input id="life" type="checkbox"/> Жизнь</label>
+<div class="tooltip" style="margin-left:6px">❔
+  <div class="tip">Важно: для Россельхозбанка потребуется указать, с временной утратой трудоспособности или без — это повлияет на тариф.</div>
+</div>
+</div>
+
+<!-- Добавили кнопку и контейнер для созаемщиков -->
+<div style="margin-top:10px; display:flex; gap:8px; align-items:center;">
+  <button class="btn secondary" id="addCoBtn">➕ Добавить созаемщика</button>
+  <div class="small-muted">Максимум 3 созаемщика. Доли вводятся в %.</div>
+</div>
+<div id="coBorrowersContainer"></div>
+
+<div id="lifeDiscountWrap" style="display:none;margin-top:8px">
+<label><input id="lifeDiscount" type="checkbox"/> Применить скидку 25% (недоступно для ДОМ.РФ и Альфа Банка)</label>
+</div>
+
+<label>Тип имущества</label>
+<select id="propType">
+<option value="apartment">Квартира</option>
+<option value="apt">Апартаменты</option>
+<option value="townhouse">Таунхаус</option>
+<option value="house">Дом</option>
+</select>
+
+<div id="materialBlock" style="display:none">
+<label>Материал наружных стен</label>
+<div class="mat-row">
+<div class="mat" id="matStone"><div>Каменный</div><div class="tooltip"><div class="tip"><strong>Каменный</strong><br/>Наружные стены не имеют в составе дерево. Внутренние перегородки/отделка допускаются.</div></div></div>
+<div class="mat" id="matWood"><div>Деревянный</div><div class="tooltip"><div class="tip"><strong>Деревянный</strong><br/>Объект построен из деревянных материалов: брус, бревно, SIP-панели и пр.</div></div></div>
+</div>
+
+<!-- New: market house and land fields -->
+<div id="houseMarketBlock" style="margin-top:10px;display:none">
+  <label>Рыночная стоимость дома (₽)</label>
+  <input id="marketHouse" type="number" placeholder="Введите сумму" />
+  <div id="marketWarn" class="warn" style="display:none"></div>
+  <div id="landBlock" style="margin-top:8px;display:none">
+    <label>Стоимость земельного участка (₽)</label>
+    <input id="landValue" type="number" placeholder="Введите стоимость участка" />
+    <div id="landWarn" class="warn" style="display:none"></div>
+  </div>
+</div>
+
+<div class="small">После выбора материала нажмите "Рассчитать". Появится окно подтверждения соответствия требованиям, если это дом.</div>
+</div>
+
+<div style="margin-top:14px;display:flex;gap:10px">
+<button class="btn" id="calc">Рассчитать</button>
+<button class="btn secondary" id="clear">Очистить</button>
+</div>
+<div class="small" style="margin-top:12px">Подсказки: Для дома — клиент подтверждает соответствие требованиям. МКБ и ГПБ — временно не работают.</div>
+</div>
+
+<!-- RIGHT RESULTS -->
+<div class="card">
+<div id="resultTop"></div>
+<div id="resultArea" style="margin-top:8px">
+<div class="small">Результат</div>
+<div id="resultsPlaceholder" style="margin-top:10px;color:var(--muted)">Заполните поля и нажмите «Рассчитать».</div>
+</div>
+
+<!-- debugWrap: скрыт по умолчанию, показывается после ввода админ-кода -->
+<div id="debugWrap" style="display:none;margin-top:12px">
+  <label><input id="showDebug" type="checkbox"/> Показать детали расчёта (debug для куратора)</label>
+  <div class="debug" id="debugBox"></div>
+</div>
+
+</div>
+</div>
+
+<!-- Modal: House confirmation -->
+<div class="modal-back" id="modalHouse">
+<div class="modal">
+<h3>Подтвердите соответствие требованиям</h3>
+<div style="max-height:420px;overflow:auto;padding:8px;color:#012">
+<h4>Юридические требования</h4>
+<ul>
+<li>Заявленная страховая сумма по дому не превышает его стоимости в отчёте об оценке</li>
+<li>Дом построен не ранее 2000 года</li>
+<li>Объект не в зоне стихийных бедствий / военных действий</li>
+<li>Отсутствуют обременения (кроме ипотеки)</li>
+<li>На объекте не проводятся строительные работы</li>
+</ul>
+<h4>Конструктивные требования</h4>
+<ul>
+<li>Внешние и внутренние стены возведены, крыша закрыта, окна установлены</li>
+<li>В материалах наружных стен нет деревянных или иных горючих материалов (если каменный)</li>
+<li>Внутри нет источников открытого огня (печь, камин и т.д.)</li>
+</ul>
+<div class="small">Дом соответствует всем требованиям?</div>
+</div>
+<div style="margin-top:12px;text-align:right">
+<button class="btn secondary" id="houseNo">Нет</button>
+<button class="btn" id="houseYes">Да</button>
+</div>
+</div>
+</div>
+
+<!-- Modal: RSHB selection -->
+<div class="modal-back" id="modalRshb">
+<div class="modal">
+<h3>Россельхозбанк — выберите режим</h3>
+<div style="padding:8px;color:#012">
+<label><input name="rshbMode" type="radio" value="without"/> Без временной утраты трудоспособности</label><br/>
+<label><input name="rshbMode" type="radio" value="with"/> С временной утраты трудоспособности</label>
+<div class="small">Выбор влияет на тарифы по жизни.</div>
+</div>
+<div style="margin-top:12px;text-align:right">
+<button class="btn secondary" id="rshbCancel">Отмена</button>
+<button class="btn" id="rshbOk">Применить</button>
+</div>
+</div>
+</div>
+
+<script>
+/* ========== Data ========== */
+const maleTable = {18:0.119,19:0.129,20:0.140,21:0.150,22:0.161,23:0.172,24:0.182,25:0.193,26:0.203,27:0.214,28:0.214,29:0.214,30:0.214,31:0.214,32:0.214,33:0.227,34:0.240,35:0.252,36:0.265,37:0.278,38:0.324,39:0.371,40:0.418,41:0.464,42:0.511,43:0.527,44:0.544,45:0.561,46:0.577,47:0.594,48:0.680,49:0.765,50:0.851,51:0.937,52:1.023,53:1.161,54:1.300,55:1.439,56:1.578,57:1.717,58:1.856,59:1.995,60:2.134,61:2.273,62:2.412,63:2.551,64:2.689};
+const femaleTable = {18:0.091,19:0.091,20:0.092,21:0.093,22:0.093,23:0.094,24:0.095,25:0.095,26:0.096,27:0.097,28:0.097,29:0.098,30:0.109,31:0.126,32:0.142,33:0.152,34:0.162,35:0.173,36:0.183,37:0.193,38:0.206,39:0.220,40:0.233,41:0.246,42:0.259,43:0.291,44:0.322,45:0.354,46:0.385,47:0.417,48:0.462,49:0.507,50:0.552,51:0.598,52:0.643,53:0.721,54:0.799,55:0.876,56:0.954,57:1.032,58:1.110,59:1.188,60:1.266,61:1.344,62:1.422,63:1.499,64:1.577};
+
+const domrfPropRate = 0.144;
+const domrfMale = {21:0.287,22:0.296,23:0.296,24:0.325,25:0.325,26:0.325,27:0.333,28:0.333,29:0.373,30:0.38,31:0.399,32:0.416,33:0.428,34:0.464,35:0.482,36:0.527,37:0.555,38:0.584,39:0.62,40:0.649,41:0.685,42:0.724,43:0.768,44:0.806,45:0.844,46:0.935,47:1.009,48:1.101,49:1.195,50:1.307,51:1.427,52:1.643,53:1.791,54:1.959,55:2.126,56:2.302,57:2.518,58:2.756,59:3.68,60:4.103,61:4.56,62:5.053,63:5.564,64:6.076};
+const domrfFemale = {21:0.222,22:0.222,23:0.222,24:0.233,25:0.233,26:0.25,27:0.25,28:0.26,29:0.26,30:0.26,31:0.269,32:0.287,33:0.296,34:0.296,35:0.325,36:0.352,37:0.38,38:0.39,39:0.416,40:0.428,41:0.454,42:0.482,43:0.511,44:0.547,45:0.575,46:0.611,47:0.658,48:0.705,49:0.751,50:0.806,51:0.871,52:0.993,53:1.063,54:1.162,55:1.249,56:1.348,57:1.477,58:1.594,59:2.518,60:2.817,61:3.134,62:3.468,63:3.803,64:4.138};
+
+/* === bank life markup map (from Надбавка.txt) === */
+const bankLifeMap = {
+  "Абсолют": 0,
+  "Ак Барс": 0,
+  "Альфа Банк": "input",
+  "ВТБ": 10,
+  "ДОМ.РФ": 0,
+  "Инвестторгбанк": 10,
+  "Металлинвестбанк": 10,
+  "МТС Банк": 10,
+  "ПСБ": 0,
+  "Райффайзенбанк": 10,
+  "Россельхозбанк": 10,
+  "Сбербанк": 0,
+  "УБРИР": "input",
+  "Уралсиб": 0,
+  "ЮниКредит": 0,
+  "Зенит": 10,
+  "ТКБ": 10,
+  "МКБ": 0
+};
+
+/* ========== UI refs ========== */
+const bankEl = document.getElementById('bank'), bankMarkupEl = document.getElementById('bankMarkup'), vtbRow = document.getElementById('vtbRow');
+const lifeChk = document.getElementById('life'), lifeDiscountWrap = document.getElementById('lifeDiscountWrap'), lifeDiscount = document.getElementById('lifeDiscount');
+const propType = document.getElementById('propType'), materialBlock = document.getElementById('materialBlock');
+const matStone = document.getElementById('matStone'), matWood = document.getElementById('matWood');
+const modalHouse = document.getElementById('modalHouse'), houseYes = document.getElementById('houseYes'), houseNo = document.getElementById('houseNo');
+const modalRshb = document.getElementById('modalRshb'), rshbOk = document.getElementById('rshbOk'), rshbCancel = document.getElementById('rshbCancel');
+const calcBtn = document.getElementById('calc'), clearBtn = document.getElementById('clear');
+const resultsPlaceholder = document.getElementById('resultsPlaceholder'), debugBox = document.getElementById('debugBox');
+const showDebug = document.getElementById('showDebug'), ageInfo = document.getElementById('ageInfo');
+const addCoBtn = document.getElementById('addCoBtn'), coContainer = document.getElementById('coBorrowersContainer');
+const houseMarketBlock = document.getElementById('houseMarketBlock'), marketHouseEl = document.getElementById('marketHouse'), landBlock = document.getElementById('landBlock'), landValueEl = document.getElementById('landValue');
+const marketWarn = document.getElementById('marketWarn'), landWarn = document.getElementById('landWarn');
+
+let chosenMaterial = null, houseConfirmed = false, rshbMode = null;
+
+/* ========== Helpers ========== */
+function parseDateISO(v){ if(!v) return null; return new Date(v+'T00:00:00'); }
+function calcAge(birthISO, refISO){ const b=parseDateISO(birthISO); if(!b) return null; const r = refISO ? parseDateISO(refISO) : new Date(); let age = r.getFullYear()-b.getFullYear(); const m = r.getMonth()-b.getMonth(); if(m<0 || (m===0 && r.getDate()<b.getDate())) age--; return age; }
+function money(x){ return Number(x).toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ₽'; }
+function showModal(id){ document.getElementById(id).style.display='flex'; }
+function hideModal(id){ document.getElementById(id).style.display='none'; }
+
+/* ========== Events ========== */
+bankEl.addEventListener('change', ()=>{
+  const b = bankEl.value; const map = bankLifeMap[b];
+  if(map === undefined) bankMarkupEl.value = '—';
+  else if(map === 'input') bankMarkupEl.value = 'Ввод';
+  else bankMarkupEl.value = map + '%';
+  vtbRow.style.display = (b === 'ВТБ') ? 'block' : 'none';
+  if(b === 'Россельхозбанк'){ showModal('modalRshb'); }
+  if(b === 'ДОМ.РФ' || b === 'Альфа Банк'){ lifeDiscount.checked = false; lifeDiscount.disabled = true; lifeDiscountWrap.style.display = lifeChk.checked ? 'block' : 'none'; } else { lifeDiscount.disabled = false; }
+  // when bank changes, update borrower share display
+  updateBorrowerShareDisplay();
+});
+
+lifeChk.addEventListener('change', ()=>{ lifeDiscountWrap.style.display = lifeChk.checked ? 'block' : 'none'; });
+propType.addEventListener('change', ()=>{ 
+  materialBlock.style.display = (propType.value === 'house') ? 'block' : 'none';
+  // show market block if house
+  houseMarketBlock.style.display = (propType.value === 'house' && document.getElementById('prop').checked) ? 'block' : 'none';
+});
+matStone.addEventListener('click', ()=>{ chosenMaterial='stone'; matStone.classList.add('active'); matWood.classList.remove('active'); });
+matWood.addEventListener('click', ()=>{ chosenMaterial='wood'; matWood.classList.add('active'); matStone.classList.remove('active'); });
+showDebug.addEventListener('change', ()=>{ debugBox.style.display = showDebug.checked ? 'block' : 'none'; });
+
+rshbCancel.addEventListener('click', ()=>{ hideModal('modalRshb'); rshbMode = null; });
+rshbOk.addEventListener('click', ()=>{
+  const sel = document.querySelector('input[name="rshbMode"]:checked');
+  if(!sel){ alert('Выберите режим для Россельхозбанка'); return; }
+  rshbMode = sel.value; hideModal('modalRshb');
+});
+
+houseNo.addEventListener('click', ()=>{ hideModal('modalHouse'); houseConfirmed = false; alert('Дом не подтверждён — обратитесь к куратору.'); });
+houseYes.addEventListener('click', ()=>{ hideModal('modalHouse'); houseConfirmed = true; proceedCalculation(true); });
+
+clearBtn.addEventListener('click', ()=>{ // clear everything incl. co-borrowers
+  document.getElementById('loan').value=''; bankEl.value=''; bankMarkupEl.value=''; document.getElementById('birth').value=''; document.getElementById('start').value=''; document.getElementById('vtbDate').value=''; document.getElementById('gender').value=''; document.getElementById('prop').checked=false; document.getElementById('title').checked=false; document.getElementById('life').checked=false; lifeDiscount.checked=false; lifeDiscountWrap.style.display='none'; propType.value='apartment'; materialBlock.style.display='none'; matStone.classList.remove('active'); matWood.classList.remove('active'); chosenMaterial=null; resultsPlaceholder.innerHTML='Заполните поля и нажмите «Рассчитать».'; debugBox.textContent=''; debugBox.style.display='none';
+  // remove all co-borrowers
+  coContainer.innerHTML = '';
+  addCoBtn.disabled = false;
+  // hide house blocks
+  houseMarketBlock.style.display = 'none';
+  landBlock.style.display = 'none';
+  marketWarn.style.display = 'none';
+  landWarn.style.display = 'none';
+  updateBorrowerShareDisplay();
+});
+
+marketHouseEl.addEventListener('input', ()=>{
+  const loan = Number(document.getElementById('loan').value)||0;
+  const val = Number(marketHouseEl.value)||0;
+  marketWarn.style.display = 'none';
+  landWarn.style.display = 'none';
+  if(val < loan){
+    landBlock.style.display = 'block';
+  } else {
+    landBlock.style.display = 'none';
+  }
+});
+
+landValueEl.addEventListener('input', ()=>{ landWarn.style.display = 'none'; });
+
+document.getElementById('birth').addEventListener('change', updateAgeInfo);
+document.getElementById('start').addEventListener('change', updateAgeInfo);
+function updateAgeInfo(){ const age = calcAge(document.getElementById('birth').value, document.getElementById('start').value); ageInfo.textContent = age!==null ? 'Возраст: ' + age + ' лет' : ''; }
+
+/* ========== Co-borrowers logic ========== */
+let coCount = 0;
+function createCoBlock(index){
+  const wrapper = document.createElement('div');
+  wrapper.className = 'co-borrower';
+  wrapper.id = 'coBorrower' + index;
+  wrapper.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <strong>Созаемщик ${index}</strong>
+      <button class="del-co" data-id="${index}" title="Удалить созаемщика">Удалить</button>
+    </div>
+    <div class="co-row" style="margin-top:8px">
+      <input type="date" id="coBirth${index}" placeholder="Дата рождения" />
+      <select id="coGender${index}">
+        <option value="">Пол</option>
+        <option value="male">Мужчина</option>
+        <option value="female">Женщина</option>
+      </select>
+      <input type="number" id="coShare${index}" min="0" max="1000" value="50" title="Доля в % (введите число)" />
+    </div>
+    <div class="small-muted">Доля в процентах (введите вручную). Для банков, кроме ВТБ, сумма долей всех участников должна равняться 100%.</div>
+  `;
+  // delete handler
+  wrapper.querySelector('.del-co').addEventListener('click', (e)=>{
+    const id = e.currentTarget.getAttribute('data-id');
+    const el = document.getElementById('coBorrower'+id);
+    if(el) el.remove();
+    coCount--;
+    addCoBtn.disabled = false;
+    updateBorrowerShareDisplay();
+  });
+  return wrapper;
+}
+
+addCoBtn.addEventListener('click', ()=>{
+  if(coCount >= 3) return;
+  coCount++;
+  const block = createCoBlock(coCount);
+  coContainer.appendChild(block);
+  if(coCount >= 3) addCoBtn.disabled = true;
+  updateBorrowerShareDisplay();
+});
+
+// helper: read co-borrowers from DOM
+function readCoBorrowers(){
+  const arr = [];
+  for(let i=1;i<=3;i++){
+    const el = document.getElementById('coBorrower'+i);
+    if(!el) continue;
+    const birth = document.getElementById('coBirth'+i).value;
+    const gender = document.getElementById('coGender'+i).value;
+    const shareRaw = Number(document.getElementById('coShare'+i).value);
+    const share = isFinite(shareRaw) ? shareRaw : 0;
+    arr.push({index:i, birth, gender, share});
+  }
+  return arr;
+}
+
+// update borrower share display (no visible input for borrower — but we can optionally log)
+function updateBorrowerShareDisplay(){
+  // silent for now
+}
+
+/* ========== Core functions ========== */
+
+function getBasePercentForBank(bank, age, gender){
+  if(age===null) return null;
+  if(age < 18 || age > 64) return null;
+  if(bank === 'Россельхозбанк'){
+    if(!rshbMode) return null;
+    if(gender === 'female'){
+      return (rshbMode === 'with') ? rshbFemaleWithDis[age] : rshbFemaleNoDis[age];
+    } else {
+      return (rshbMode === 'with') ? rshbMaleWithDis[age] : rshbMaleNoDis[age];
+    }
+  }
+  return (gender === 'female') ? femaleTable[age] : maleTable[age];
+}
+
+function calcClick(){
+  const loan = Number(document.getElementById('loan').value) || 0;
+  const bank = bankEl.value;
+  const propChecked = document.getElementById('prop').checked;
+  const titleChecked = document.getElementById('title').checked;
+  const lifeChecked = document.getElementById('life').checked;
+  const propTypeVal = propType.value;
+  const birth = document.getElementById('birth').value;
+  const start = document.getElementById('start').value;
+  const gender = document.getElementById('gender').value;
+  const discount = document.getElementById('lifeDiscount').checked && !document.getElementById('lifeDiscount').disabled;
+
+  if(!loan){ alert('Введите сумму кредита'); return; }
+  if(!bank){ alert('Выберите банк'); return; }
+  if(lifeChecked && !gender){ alert('Выберите пол для расчёта жизни'); return; }
+  if(propTypeVal === 'house' && !chosenMaterial){ alert('Выберите материал наружных стен: каменный или деревянный'); return; }
+  if(propTypeVal === 'house' && !houseConfirmed){ showModal('modalHouse'); return; }
+
+  proceedCalculation(false);
+}
+
+function proceedCalculation(fromModal){
+  const loan = Number(document.getElementById('loan').value) || 0;
+  const bank = bankEl.value;
+  const propChecked = document.getElementById('prop').checked;
+  const titleChecked = document.getElementById('title').checked;
+  const lifeChecked = document.getElementById('life').checked;
+  const propTypeVal = propType.value;
+  const birth = document.getElementById('birth').value;
+  const start = document.getElementById('start').value;
+  const gender = document.getElementById('gender').value;
+  const discount = document.getElementById('lifeDiscount').checked && !document.getElementById('lifeDiscount').disabled;
+
+  // compute bank markup
+  let bankMarkup = undefined;
+  if(bank && typeof bankLifeMap !== 'undefined') bankMarkup = bankLifeMap[bank];
+  let bankMarkupNum = 0;
+  if(bankMarkup === undefined){
+    bankMarkupNum = 0;
+  } else if(bankMarkup === 'input'){
+    const txt = prompt('Укажите надбавку банка в % (например 5)');
+    bankMarkupNum = Number(txt) || 0;
+  } else {
+    bankMarkupNum = Number(bankMarkup) || 0;
+  }
+  const loanWithMarkup = loan * (1 + bankMarkupNum/100.0);
+
+  // debug holder
+  const debug = {bank:bank, bankMarkup:bankMarkupNum, loan, loanWithMarkup, age:null, basePercent:null, finalRate:null, participants:[]};
+
+  // prepare lines
+  let lines = [];
+  lines.push({label:'💰 Страховая сумма', value: loan, isSum:true});
+  if(bankMarkupNum !== 0){
+    lines.push({label:'🔺 Сумма с надбавкой', value: loanWithMarkup, isSum:false, type:'markup'});
+  }
+
+  // property
+  if(propChecked){
+    if(propTypeVal === 'house'){
+      // special logic using marketHouse and landValue
+      const marketHouse = Number(marketHouseEl.value) || 0;
+      const landValue = Number(landValueEl.value) || 0;
+      marketWarn.style.display = 'none'; landWarn.style.display = 'none';
+      if(marketHouse <= 0){
+        alert('Введите рыночную стоимость дома'); return;
+      }
+      // if marketHouse < loan then land required
+      if(marketHouse < loan){
+        if(landValue <= 0){
+          alert('Введите стоимость земельного участка'); return;
+        }
+        const total = marketHouse + landValue;
+        if(total < loan){
+          // warning: refer to curator
+          marketWarn.textContent = 'Рыночная стоимость дома и участка меньше суммы кредита — обратитесь к куратору.';
+          marketWarn.style.display = 'block';
+          return;
+        }
+        if(total > loan){
+          marketWarn.textContent = 'Сумма дома и участка превышает сумму кредита — исправьте значения.';
+          marketWarn.style.display = 'block';
+          return;
+        }
+        // compute per-material rates
+        const ratePercent = (chosenMaterial === 'stone') ? 0.18 : 0.43;
+        const houseSum = marketHouse * (ratePercent/100.0);
+        const landSum = landValue * 0.001; // 0.1%
+        lines.push({label:'🏠 Страхование дома', value: houseSum, rate: ratePercent, type:'prop'});
+        lines.push({label:'🌳 Земельный участок', value: landSum, rate: 0.1, type:'prop'});
+      } else {
+        // marketHouse >= loan — insure house for marketHouse but land not needed
+        const ratePercent = (chosenMaterial === 'stone') ? 0.18 : 0.43;
+        const houseSum = marketHouse * (ratePercent/100.0);
+        lines.push({label:'🏠 Страхование дома', value: houseSum, rate: ratePercent, type:'prop'});
+      }
+    } else {
+      // non-house property uses loanWithMarkup per previous logic
+      let ratePercent = 0.09; // default for apartment
+      let label = 'Страхование квартиры';
+      if(bank === 'ДОМ.РФ'){
+        if(propTypeVal === 'apartment' || propTypeVal === 'apt') { ratePercent = 0.144; label='Страхование квартиры/апартаментов (ДОМ.РФ)'; }
+        else if(propTypeVal === 'townhouse') { ratePercent = 0.15; label='Страхование таунхауса (ДОМ.РФ)'; }
+        else if(propTypeVal === 'house') { ratePercent = (chosenMaterial === 'stone') ? 0.18 : 0.43; label='Страхование дома (ДОМ.РФ)'; }
+      } else {
+        if(propTypeVal === 'apartment'){ ratePercent = 0.09; label='Страхование квартиры'; }
+        if(propTypeVal === 'apt'){ ratePercent = 0.10; label='Страхование апартаментов'; }
+        if(propTypeVal === 'townhouse'){ ratePercent = 0.15; label='Страхование таунхауса'; }
+        if(propTypeVal === 'house'){ ratePercent = (chosenMaterial === 'stone') ? 0.18 : 0.43; label = (chosenMaterial === 'stone') ? 'Страхование дома (каменный)' : 'Страхование дома (деревянный)'; }
+      }
+      const propSum = loanWithMarkup * (ratePercent / 100.0);
+      lines.push({label: '🏠 ' + label, value: propSum, rate: ratePercent, type:'prop'});
+    }
+  }
+
+  // title always 0.2%
+  if(titleChecked){
+    const t = loanWithMarkup * 0.002;
+    lines.push({label:'📜 Страхование титула', value: t, rate: 0.2, type:'title'});
+  }
+
+  // life: handle borrower + co-borrowers
+  if(lifeChecked){
+    const coArr = readCoBorrowers(); // [{index, birth, gender, share}]
+    let sumCo = 0;
+    for(const c of coArr) sumCo += Number(c.share) || 0;
+
+    let borrowerShare;
+    if(bank === 'ВТБ'){
+      borrowerShare = 100;
+    } else {
+      if(sumCo > 100){ alert('Сумма долей созаемщиков превышает 100% — исправьте доли или удалите созаемщика.'); return; }
+      borrowerShare = Math.max(0, 100 - sumCo);
+    }
+
+    // Borrower
+    const borrowerAge = calcAge(birth, start);
+    debug.age = borrowerAge;
+    const borrowerBasePercent = getBasePercentForBank(bank, borrowerAge, gender);
+    debug.basePercent = borrowerBasePercent;
+    if(borrowerBasePercent === null){
+      lines.push({label:'❤️ Страхование жизни (заемщик)', value: null, note:'Возраст заемщика вне диапазона — обратитесь к куратору.'});
+    } else {
+      let effPercent = borrowerBasePercent;
+      if(discount && !['ДОМ.РФ','Альфа Банк'].includes(bank)) effPercent = effPercent * 0.75;
+      const borrowerSum = loanWithMarkup * (borrowerShare/100.0) * (effPercent / 100.0);
+      lines.push({label:'❤️ Жизнь (заемщик)', value: borrowerSum, rate: effPercent, share: borrowerShare, type:'life'});
+      debug.participants.push({role:'borrower', age: borrowerAge, gender, share: borrowerShare, rate: effPercent, sum: borrowerSum});
+    }
+
+    // co-borrowers
+    for(const c of coArr){
+      const cAge = calcAge(c.birth, start);
+      const cBase = getBasePercentForBank(bank, cAge, c.gender);
+      if(cBase === null){
+        lines.push({label:`❤️ Жизнь (созаемщик ${c.index})`, value: null, note:'Возраст созаемщика вне диапазона — обратитесь к куратору.'});
+        debug.participants.push({role:'co'+c.index, age:cAge, gender:c.gender, share:c.share, rate:null, sum:null});
+      } else {
+        let cEff = cBase;
+        if(discount && !['ДОМ.РФ','Альфа Банк'].includes(bank)) cEff = cEff * 0.75;
+        const cSum = loanWithMarkup * ( (Number(c.share)||0) / 100.0 ) * (cEff / 100.0);
+        lines.push({label:`❤️ Жизнь (созаемщик ${c.index})`, value: cSum, rate: cEff, share: c.share, type:'life'});
+        debug.participants.push({role:'co'+c.index, age:cAge, gender:c.gender, share:c.share, rate:cEff, sum:cSum});
+      }
+    }
+  }
+
+  // compute premium: sum only risk lines (prop, title, life)
+  let premium = 0;
+  for(const it of lines){
+    if(it.type && (it.type === 'prop' || it.type === 'title' || it.type === 'life')){
+      if(it.value && typeof it.value === 'number') premium += it.value;
+    }
+  }
+
+  // render client-facing result
+  let html = '';
+  html += `<div class="ok-badge">Отчёт успешно обработан (предварительно)</div>`;
+  html += `<div class="result-line"><div>💰 Страховая сумма</div><div>${money(loan)}</div></div>`;
+  if(bankMarkupNum !== 0){
+    html += `<div class="result-line"><div>🔺 Сумма с надбавкой</div><div>${money(loanWithMarkup)}</div></div>`;
+  }
+  // render risk lines only
+  for(const it of lines){
+    if(it.type && (it.type === 'prop' || it.type === 'title' || it.type === 'life')){
+      if(it.value === null){
+        html += `<div style="padding:8px 0;color:#ffddcc">${it.label}: ${it.note || '—'}</div>`;
+      } else {
+        if(it.type === 'life' && it.share !== undefined){
+          html += `<div class="result-line"><div>${it.label} (${it.share}%)</div><div>${money(it.value)}</div></div>`;
+        } else {
+          html += `<div class="result-line"><div>${it.label}</div><div>${money(it.value)}</div></div>`;
+        }
+      }
+    }
+  }
+  html += `<div style="padding-top:8px;font-weight:700;color:#dff">Итого страховая премия: <span style="float:right">${money(premium)}</span></div>`;
+  resultsPlaceholder.innerHTML = html;
+
+  // debug for curator
+  const debugObj = {lines, debug};
+  debugBox.textContent = JSON.stringify(debugObj, null, 2);
+  if(showDebug && showDebug.checked) debugBox.style.display = 'block'; else debugBox.style.display = 'none';
+}
+
+/* attach */
+document.getElementById('calc').addEventListener('click', calcClick);
+
+/* init */
+updateAgeInfo();
+
+/* === Россельхозбанк tables === */
+const rshbMaleNoDis = {18:0.119,19:0.129,20:0.140,21:0.150,22:0.161,23:0.172,24:0.182,25:0.193,26:0.203,27:0.214,28:0.214,29:0.214,30:0.214,31:0.214,32:0.214,33:0.227,34:0.240,35:0.252,36:0.265,37:0.278,38:0.324,39:0.371,40:0.418,41:0.464,42:0.511,43:0.527,44:0.544,45:0.561,46:0.577,47:0.594,48:0.680,49:0.765,50:0.851,51:0.937,52:1.023,53:1.161,54:1.300,55:1.439,56:1.578,57:1.717,58:1.856,59:1.995,60:2.134,61:2.273,62:2.412,63:2.551,64:2.689};
+const rshbMaleWithDis = {18:0.217,19:0.237,20:0.256,21:0.276,22:0.295,23:0.314,24:0.334,25:0.353,26:0.373,27:0.392,28:0.392,29:0.392,30:0.392,31:0.392,32:0.392,33:0.415,34:0.439,35:0.463,36:0.485,37:0.509,38:0.594,39:0.680,40:0.765,41:0.85,42:0.935,43:0.965,44:0.996,45:1.027,46:1.058,47:1.088,48:1.245,49:1.402,50:1.559,51:1.716,52:1.873,53:2.128,54:2.382,55:2.636,56:2.89,57:3.145,58:3.399,59:3.654,60:3.908,61:4.163,62:4.417,63:4.671,64:4.926};
+const rshbFemaleNoDis = {18:0.091,19:0.091,20:0.092,21:0.093,22:0.093,23:0.094,24:0.095,25:0.095,26:0.096,27:0.097,28:0.097,29:0.098,30:0.109,31:0.126,32:0.142,33:0.152,34:0.162,35:0.173,36:0.183,37:0.193,38:0.206,39:0.220,40:0.233,41:0.246,42:0.259,43:0.291,44:0.322,45:0.354,46:0.385,47:0.417,48:0.462,49:0.507,50:0.552,51:0.598,52:0.643,53:0.721,54:0.799,55:0.876,56:0.954,57:1.032,58:1.110,59:1.188,60:1.266,61:1.344,62:1.422,63:1.499,64:1.577};
+const rshbFemaleWithDis = {18:0.166,19:0.168,20:0.168,21:0.17,22:0.171,23:0.172,24:0.173,25:0.174,26:0.175,27:0.177,28:0.178,29:0.179,30:0.2,31:0.23,32:0.26,33:0.278,34:0.297,35:0.316,36:0.335,37:0.354,38:0.378,39:0.402,40:0.426,41:0.45,42:0.475,43:0.533,44:0.591,45:0.648,46:0.706,47:0.764,48:0.846,49:0.929,50:1.012,51:1.094,52:1.177,53:1.32,54:1.462,55:1.605,56:1.748,57:1.891,58:2.033,59:2.176,60:2.318,61:2.46,62:2.604,63:2.746,64:2.889};
+
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+
+  // Wait until calc button exists
+  const waitForEl = (selector, timeout=3000) => new Promise((resolve, reject) => {
+    const el = document.querySelector(selector);
+    if(el) return resolve(el);
+    const obs = new MutationObserver(()=> {
+      const e = document.querySelector(selector);
+      if(e){ obs.disconnect(); resolve(e); }
+    });
+    obs.observe(document.body, {childList:true, subtree:true});
+    setTimeout(()=> { obs.disconnect(); reject(new Error('timeout')); }, timeout);
+  });
+
+  // Admin UI builder
+  (async function initAdmin(){
+    try{
+      const calcWrap = await waitForEl('#calc');
+      // create admin container
+      const adminWrap = document.createElement('div');
+      adminWrap.id = 'assistantAdminWrap';
+      adminWrap.style.marginTop = '10px';
+      adminWrap.style.display = 'flex';
+      adminWrap.style.alignItems = 'center';
+      adminWrap.style.gap = '8px';
+      adminWrap.style.flexWrap = 'wrap';
+
+      const adminInput = document.createElement('input');
+      adminInput.id = 'adminCodeInput';
+      adminInput.placeholder = 'Код админа';
+      adminInput.style.padding='6px';
+      adminInput.style.width='120px';
+      adminInput.autocomplete = 'off';
+
+      const adminBtn = document.createElement('button');
+      adminBtn.id = 'adminLoginBtn';
+      adminBtn.textContent = 'Войти';
+      adminBtn.className = 'btn secondary';
+
+      const adminCheckBtn = document.createElement('button');
+      adminCheckBtn.id = 'adminCheckBtn';
+      adminCheckBtn.textContent = '🧠 Проверить у GPT-5';
+      adminCheckBtn.className = 'btn primary';
+      adminCheckBtn.style.display='none';
+      adminCheckBtn.style.marginLeft='8px';
+
+      const adminNotice = document.createElement('div');
+      adminNotice.id = 'adminNotice';
+      adminNotice.style.display='none';
+      adminNotice.style.color='#cfe9ff';
+      adminNotice.style.fontSize='13px';
+      adminNotice.style.marginLeft='8px';
+
+      const adminDebug = document.createElement('pre');
+      adminDebug.id = 'adminDebug';
+      adminDebug.style.display='none';
+      adminDebug.style.background='#fff';
+      adminDebug.style.color='#000';
+      adminDebug.style.padding='8px';
+      adminDebug.style.maxHeight='300px';
+      adminDebug.style.overflow='auto';
+      adminDebug.style.width='100%';
+
+      adminWrap.appendChild(adminInput);
+      adminWrap.appendChild(adminBtn);
+      adminWrap.appendChild(adminCheckBtn);
+      adminWrap.appendChild(adminNotice);
+      // append after calc button's parent
+      calcWrap.parentNode.appendChild(adminWrap);
+      calcWrap.parentNode.appendChild(adminDebug);
+
+      adminBtn.addEventListener('click', ()=> {
+        const code = adminInput.value.trim();
+        if(code === '1996'){
+          adminCheckBtn.style.display='inline-block';
+          adminNotice.style.display='inline-block';
+          adminNotice.textContent = 'Админ-режим: активирован';
+          adminDebug.style.display='block';
+          alert('Админ-режим активирован');
+          // show debugWrap after admin login
+          const debugWrap = document.getElementById('debugWrap');
+          if(debugWrap) debugWrap.style.display = 'block';
+        } else {
+          alert('❌ Неверный код доступа');
+        }
+      });
+
+      adminCheckBtn.addEventListener('click', async ()=>{
+        adminNotice.textContent = 'Отправка на сервер проверки...';
+        // trigger calc if available
+        const calcBtn = document.getElementById('calc');
+        if(calcBtn) calcBtn.click();
+        await new Promise(r=>setTimeout(r,250));
+        // try to read debugBox content or reconstruct payload
+        let dbgEl = document.getElementById('debugBox') || document.getElementById('debug');
+        let dbgObj = null;
+        if(dbgEl){
+          try{ dbgObj = JSON.parse(dbgEl.textContent); } catch(e){ dbgObj = null; }
+        }
+        const payload = {
+          bank: (document.getElementById('bank') && document.getElementById('bank').value) || null,
+          loan: Number(document.getElementById('loan') && document.getElementById('loan').value) || 0,
+          birth: document.getElementById('birth') ? document.getElementById('birth').value : null,
+          start: document.getElementById('start') ? document.getElementById('start').value : null,
+          gender: (document.getElementById('gender') && document.getElementById('gender').value) || null,
+          propChecked: document.getElementById('prop') ? document.getElementById('prop').checked : false,
+          titleChecked: document.getElementById('title') ? document.getElementById('title').checked : false,
+          lifeChecked: document.getElementById('life') ? document.getElementById('life').checked : false,
+          propType: document.getElementById('propType') ? document.getElementById('propType').value : 'apartment',
+          material: window.chosenMaterial || 'stone',
+          discount: document.getElementById('lifeDiscount') ? document.getElementById('lifeDiscount').checked : false,
+          client_debug: dbgObj
+        };
+        try{
+          const res = await fetch('https://ingostrakh-calc.onrender.com/check',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify(payload)
+          });
+          if(!res.ok) throw new Error('Server returned ' + res.status);
+          const data = await res.json();
+          if(data.match){
+            adminNotice.textContent = '✅ GPT подтвердил расчёт';
+            adminDebug.textContent = JSON.stringify(data, null, 2);
+          } else {
+            adminNotice.textContent = '❌ GPT не подтвердил расчёт — подробности в логах сервера';
+            adminDebug.textContent = JSON.stringify(data, null, 2);
+          }
+        }catch(err){
+          adminNotice.textContent = 'Ошибка проверки: ' + err.message;
+        }
+      });
+
+    }catch(err){
+      console.warn('Admin UI init failed', err);
+    }
+  })();
+
+  // Install DOM.RF wrapper for getBasePercentForBank without overwriting until original exists.
+  (function installDOMRFWrapper(){
+    const tryInstall = ()=>{
+      if(typeof getBasePercentForBank === 'function' && !getBasePercentForBank.__assistant_wrapped){
+        const orig = getBasePercentForBank;
+        getBasePercentForBank = function(bank, age, gender){
+          try{
+            if(bank === 'ДОМ.РФ' && age !== null && age >=21 && age <=64){
+              if(gender === 'female'){
+                if(typeof domrfFemale !== 'undefined' && domrfFemale[age] !== undefined) return domrfFemale[age];
+              } else {
+                if(typeof domrfMale !== 'undefined' && domrfMale[age] !== undefined) return domrfMale[age];
+              }
+            }
+          }catch(e){}
+          return orig(bank, age, gender);
+        };
+        getBasePercentForBank.__assistant_wrapped = true;
+        try{
+          const bankEl = document.getElementById('bank');
+          if(bankEl && !bankEl.__assistant_event_attached){
+            bankEl.addEventListener('change', ()=> {
+              const b = bankEl.value;
+              const vtbRow = document.getElementById('vtbRow');
+              if(vtbRow) vtbRow.style.display = (b === 'ВТБ') ? 'block' : 'none';
+              const lifeDiscountWrap = document.getElementById('lifeDiscountWrap');
+              if(b === 'ДОМ.РФ' || b === 'Альфа Банк'){
+                const lifeDiscountEl = document.getElementById('lifeDiscount');
+                if(lifeDiscountEl){ lifeDiscountEl.checked=false; lifeDiscountEl.disabled=true; }
+                if(lifeDiscountWrap) lifeDiscountWrap.style.display = (document.getElementById('life').checked)?'block':'none';
+              } else {
+                const lifeDiscountEl = document.getElementById('lifeDiscount');
+                if(lifeDiscountEl) lifeDiscountEl.disabled=false;
+              }
+              if(b === 'Россельхозбанк'){
+                const modal = document.getElementById('modalRshb');
+                if(modal) modal.style.display = 'flex';
+              }
+              const propType = document.getElementById('propType');
+              const materialBlock = document.getElementById('materialBlock');
+              if(propType && materialBlock) materialBlock.style.display = (propType.value === 'house') ? 'block' : 'none';
+            });
+            bankEl.__assistant_event_attached = true;
+          }
+        }catch(e){}
+      } else {
+        setTimeout(tryInstall, 200);
+      }
+    };
+    tryInstall();
+  })();
+
+});
+</script>
+</body>
+</html>
