@@ -4,7 +4,7 @@ server_fixed4.py — универсальный сервер для провер
 """
 import os, json, datetime
 from typing import Any, Dict, List, Optional, Union
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -121,3 +121,49 @@ async def admin_logs(password: Optional[str] = Query(None)):
         try: logs = json.load(f)
         except: logs = []
     return {"logs": logs}
+
+# ======================================================
+# 🧠 Новый маршрут /parse — распознаёт текст клиента (GPT-5)
+# ======================================================
+@app.post("/parse")
+async def parse_text(req: Request):
+    try:
+        if client is None:
+            raise HTTPException(status_code=500, detail="OpenAI client not initialized")
+
+        data = await req.json()
+        text = data.get("text", "")
+        if not text:
+            raise HTTPException(status_code=400, detail="Нет текста")
+
+        prompt = f"""
+Ты помощник ипотечного калькулятора. Из текста клиента выдели:
+- банк (строка)
+- сумму кредита (в рублях, числом)
+- пол ("male" или "female")
+- дату рождения (в формате YYYY-MM-DD)
+- тип имущества (apartment | house | townhouse)
+- материал (stone | wood)
+Верни только JSON, без комментариев.
+Пример:
+{{"bank":"ДОМ.РФ","loan":5157198,"gender":"female","birth":"1991-03-06","propType":"house","material":"stone"}}
+
+Текст клиента:
+{text}
+"""
+
+        resp = client.chat.completions.create(
+            model="gpt-5",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0
+        )
+        raw = resp.choices[0].message.content.strip()
+
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            return JSONResponse(content={"error": "GPT-5 вернул невалидный JSON", "raw": raw}, status_code=500)
+
+        return JSONResponse(content=parsed)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
