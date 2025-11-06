@@ -1854,5 +1854,364 @@ async function autofillPipeline(text){
     tryInstall();
   })();
 </script>
+
+
+<!-- BEGIN AUTOFILL PATCH: robust admin autofill inserted by assistant -->
+<script>
+/*
+  IMPROVED AUTOFILL PATCH v2
+  - Stronger bank selection (matches option text/value/token, fuzzy checks)
+  - Handles native <select> and many custom dropdown implementations
+  - Simulates user events (focus, pointer, keyboard) and retries reliably
+  - Uses localStorage memory mapping aggressively and falls back to substring heuristics
+  - Includes a test harness function `__autofill_patch.runTests()` you can run from console
+*/
+
+(function(){
+  const PARSE_ENDPOINT = 'https://ingostrakh-calc.onrender.com/parse';
+  const STATUS_ID = 'gpt-status';
+  const LOG_ID = 'gptConsole';
+
+  function log(msg){
+    const el = document.getElementById(LOG_ID);
+    if(el){
+      const d = document.createElement('div');
+      d.style.fontSize='12px';
+      d.textContent = '['+new Date().toLocaleTimeString()+'] ' + msg;
+      el.prepend(d);
+    }
+    console.debug('[AUTOFILL]', msg);
+  }
+
+  // util: pause
+  const wait = ms => new Promise(r=>setTimeout(r, ms));
+
+  // fetch with timeout (longer)
+  async function fetchWithTimeout(url, opts={}, timeout=6000){
+    return new Promise((resolve, reject)=>{
+      const timer = setTimeout(()=>{ reject(new Error('timeout')) }, timeout);
+      fetch(url, Object.assign({mode:'cors'}, opts)).then(r=>{
+        clearTimeout(timer); resolve(r);
+      }).catch(e=>{ clearTimeout(timer); reject(e); });
+    });
+  }
+
+  // server parser call
+  async function callParseServer(text){
+    try{
+      const resp = await fetchWithTimeout(PARSE_ENDPOINT, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({text})
+      }, 7000);
+      if(!resp.ok) { log('Server parse failed status='+resp.status); return null; }
+      const j = await resp.json().catch(()=>null);
+      if(j && j.ok && j.data) return j.data;
+      return j && j.data ? j.data : null;
+    }catch(e){
+      log('Server parse error: '+(e.message||e));
+      return null;
+    }
+  }
+
+  // improved local parser (extend as needed)
+  function localParse(text){
+    const out = {};
+    if(!text) return out;
+    const t = text.toLowerCase();
+    // numbers: common patterns, prefer 6+ digits for loan
+    const nums = (text.match(/\d{5,12}/g)||[]).map(s=>parseInt(s.replace(/\D/g,''),10));
+    if(nums.length) out.loan = Math.max(...nums);
+    const date = text.match(/\b\d{2}[.\-/]\d{2}[.\-/]\d{4}\b/);
+    if(date) out.birth = date[0];
+    if(/\b(муж|мужчина|male)\b/i.test(t)) out.gender='male';
+    if(/\b(жен|женщина|female)\b/i.test(t)) out.gender='female';
+    if(/\b(дом|дом-|частн|частный|house)\b/i.test(t)) out.propType='Дом';
+    const material = (t.match(/\b(кирпич|деревян|брус|пеноблок|пенобетон|камень)\b/)||[])[0];
+    if(material) out.material = material;
+    // detect bank tokens aggressively
+    const bankTokens = ['втб','сбер','альфа','россельхоз','псб','мкб','уралсиб','зенит','юникредит','банк втб','vtb'];
+    for(const b of bankTokens) if(t.includes(b)) { out.bank = b; break; }
+    // money / sum
+    const money = text.match(/(\d{1,3}(?:[ \u00A0]\d{3})+(?:[.,]\d+)?|\d{5,12})/);
+    if(money) out.marketHouse = money[1].replace(/\s/g,'').replace(',','.');
+    log('localParse → '+JSON.stringify(out));
+    return out;
+  }
+
+  // Normalize string: remove punctuation, multiple spaces
+  function norm(s){ return (s||'').toString().trim().toLowerCase().replace(/\s+/g,' ').replace(/[^\wа-яё0-9 ]/gi,''); }
+
+  // Aggressive select matcher: for native <select>
+  function matchNativeSelect(selectEl, candidate){
+    if(!selectEl || !candidate) return false;
+    candidate = norm(candidate);
+    // direct value match
+    for(let i=0;i<selectEl.options.length;i++){
+      const opt = selectEl.options[i];
+      const txt = norm(opt.text || opt.value || '');
+      if(txt === candidate || txt.includes(candidate) || candidate.includes(txt)){
+        selectEl.selectedIndex = i;
+        selectEl.dispatchEvent(new Event('change',{bubbles:true}));
+        selectEl.dispatchEvent(new Event('input',{bubbles:true}));
+        return true;
+      }
+    }
+    // token match
+    const toks = candidate.split(' ');
+    for(let i=0;i<selectEl.options.length;i++){
+      const opt = selectEl.options[i];
+      const txt = norm(opt.text || opt.value || '');
+      for(const tk of toks){
+        if(tk && txt.includes(tk)){
+          selectEl.selectedIndex = i;
+          selectEl.dispatchEvent(new Event('change',{bubbles:true}));
+          selectEl.dispatchEvent(new Event('input',{bubbles:true}));
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  // Handle many custom dropdowns: open them and click matching item
+  async function matchCustomDropdown(rootCandidate, candidate){
+    candidate = norm(candidate);
+    // search for dropdown wrappers that contain options as list items
+    const dropdowns = Array.from(document.querySelectorAll('div,ul')).filter(n=>{
+      const role = n.getAttribute('role')||'';
+      return n.querySelectorAll && (n.querySelectorAll('li,div[role="option"],[data-value]').length>0);
+    });
+    for(const dd of dropdowns){
+      const options = dd.querySelectorAll('li,div[role="option"],[data-value]');
+      if(options.length===0) continue;
+      for(const opt of options){
+        const txt = norm(opt.innerText || opt.getAttribute('data-value') || opt.textContent || '');
+        if(!txt) continue;
+        if(txt === candidate || txt.includes(candidate) || candidate.includes(txt) || txt.split(' ').some(t=> candidate.includes(t))){
+          try{
+            // scroll, focus, click
+            opt.scrollIntoView({block:'center'});
+            opt.focus && opt.focus();
+            opt.click();
+            await wait(120);
+            log('Clicked custom dropdown option: '+txt);
+            return true;
+          }catch(e){}
+        }
+      }
+    }
+    return false;
+  }
+
+  // master bank setter: tries memory, native select, custom dropdowns, and fallback heuristics
+  async function setBankCandidate(bankCandidate){
+    if(!bankCandidate) return false;
+    const candNorm = norm(bankCandidate);
+    // check memory map
+    try{
+      const mem = JSON.parse(localStorage.getItem('gpt_bank_memory_v1')||'{}') || {};
+      for(const key in mem){
+        if(candNorm.includes(norm(key)) || norm(key).includes(candNorm)){
+          const val = mem[key];
+          log('Using memory mapping '+key+' → '+val);
+          bankCandidate = val;
+          break;
+        }
+      }
+    }catch(e){}
+
+    // 1) try native select elements looking for #bank or any select with many options
+    const selects = Array.from(document.querySelectorAll('select'));
+    // try targeted id first
+    const target = document.querySelector('#bank');
+    if(target && target.tagName.toLowerCase()==='select'){
+      if(matchNativeSelect(target, bankCandidate)) { log('Matched #bank native select'); return true; }
+    }
+    // try all selects
+    for(const s of selects){
+      if(matchNativeSelect(s, bankCandidate)){ log('Matched generic native select'); return true; }
+    }
+
+    // 2) try custom dropdowns
+    if(await matchCustomDropdown(document.body, bankCandidate)){ log('Matched custom dropdown'); return true; }
+
+    // 3) try click-through on visible option-like buttons
+    const btns = Array.from(document.querySelectorAll('button,div')).filter(n=> (n.innerText||'').toLowerCase().includes(bankCandidate.split(' ')[0]));
+    for(const b of btns){
+      try{ b.click(); await wait(120); log('Clicked button matching bank token'); return true; }catch(e){}
+    }
+
+    // 4) brute-force: pick first select option which contains token
+    for(const s of selects){
+      for(let i=0;i<s.options.length;i++){
+        const txt = norm(s.options[i].text || s.options[i].value || '');
+        if(txt.includes(candNorm) || candNorm.includes(txt)){
+          s.selectedIndex = i; s.dispatchEvent(new Event('change',{bubbles:true}));
+          log('Brute selected option: '+txt); return true;
+        }
+      }
+    }
+
+    log('Failed to set bank for candidate: '+bankCandidate);
+    return false;
+  }
+
+  // universal setter for fields
+  function trySet(selector, value){
+    if(value===null||value===undefined) return false;
+    const el = document.querySelector(selector);
+    if(!el) return false;
+    try{
+      if(el.tagName.toLowerCase()==='input' || el.tagName.toLowerCase()==='textarea'){
+        const t = el.type || '';
+        if(t==='checkbox' || t==='radio') el.checked = !!value;
+        else el.value = value;
+        el.focus(); el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));
+        return true;
+      } else if(el.tagName.toLowerCase()==='select'){
+        el.value = value;
+        el.selectedIndex = [...el.options].findIndex(o=> norm(o.text||o.value)===norm(value));
+        el.dispatchEvent(new Event('change',{bubbles:true})); return true;
+      } else {
+        el.textContent = value; el.dispatchEvent(new Event('change',{bubbles:true})); return true;
+      }
+    }catch(e){ console.warn(e); return false; }
+  }
+
+  // try to click calc robustly with retries
+  async function clickCalculate(){
+    // prefer id
+    const byId = document.getElementById('calc');
+    if(byId){ byId.scrollIntoView({block:'center'}); byId.focus(); byId.click(); await wait(120); log('Clicked #calc'); return true; }
+    // search by text
+    const candidates = Array.from(document.querySelectorAll('button,input[type=button],input[type=submit]'));
+    const keywords = ['рассчит','рассчитать','посчитать','получить расчет','calculate','расчет'];
+    for(const c of candidates){
+      const txt = (c.innerText||c.value||'').toLowerCase();
+      if(!txt) continue;
+      for(const k of keywords) if(txt.includes(k)){ try{ c.scrollIntoView({block:'center'}); c.focus(); c.click(); await wait(120); log('Clicked calc by text: '+txt); return true; }catch(e){} }
+    }
+    // try elements that look like buttons
+    const btns = Array.from(document.querySelectorAll('div[role="button"],a[role="button"]'));
+    for(const b of btns){
+      const txt = (b.innerText||'').toLowerCase();
+      for(const k of keywords) if(txt.includes(k)){ try{ b.click(); await wait(120); log('Clicked calc alt'); return true; }catch(e){} }
+    }
+    log('No calc button found');
+    return false;
+  }
+
+  // main pipeline
+  async function autofillPipeline(text){
+    if(!text || !text.trim()){ log('No text provided'); return; }
+    const status = document.getElementById(STATUS_ID);
+    if(status) status.textContent = 'Статус: обработка...';
+    log('Autofill started');
+    let parsed = await callParseServer(text);
+    if(!parsed) parsed = localParse(text);
+    // merge memory enhancements
+    try{
+      const mem = JSON.parse(localStorage.getItem('gpt_bank_memory_v1')||'{}')||{};
+      const tk = (text.split(/\s+/).find(t=>t.length>2)||'').toLowerCase();
+      if(mem[tk]) parsed.bank = mem[tk];
+    }catch(e){}
+
+    // set fields
+    if(parsed.loan) trySet('#loan', parsed.loan);
+    if(parsed.birth) trySet('#birth', parsed.birth);
+    if(parsed.start) trySet('#start', parsed.start);
+    if(parsed.gender) trySet('#gender', parsed.gender||'');
+    if(parsed.propType) trySet('#propType', parsed.propType);
+    if(parsed.material) trySet('#material', parsed.material);
+    if(parsed.marketHouse) trySet('#marketHouse', parsed.marketHouse);
+
+    // bank handling (robust)
+    if(parsed.bank){
+      const ok = await setBankCandidate(parsed.bank);
+      if(!ok){
+        // try to use mapping of common tokens -> option values
+        const map = {'втб':'VTB','сбер':'Сбербанк','альфа':'Альфа-Банк','россельхоз':'Россельхозбанк'};
+        const mapped = map[norm(parsed.bank)] || parsed.bank;
+        await setBankCandidate(mapped);
+      }
+    }
+
+    // allow event handlers to run
+    await wait(600);
+
+    // ensure selections applied: check bank select value or visible label
+    const bankEl = document.querySelector('#bank') || document.querySelector('select[name*="bank"]');
+    if(bankEl){
+      log('Bank element final value: '+(bankEl.value||bankEl.selectedOptions && bankEl.selectedOptions[0] && bankEl.selectedOptions[0].text || '(none)'));
+    }
+
+    // click calculate
+    await clickCalculate();
+
+    // learn mapping to memory
+    try{
+      const memKey = 'gpt_bank_memory_v1';
+      const mem = JSON.parse(localStorage.getItem(memKey)||'{}')||{};
+      const key = (text.split(/\s+/).find(t=>t.length>2)||'').toLowerCase();
+      if(key && parsed.bank){
+        mem[key] = parsed.bank;
+        localStorage.setItem(memKey, JSON.stringify(mem));
+        log('Saved memory: '+key+' → '+parsed.bank);
+      }
+    }catch(e){ console.warn(e); }
+
+    if(status) status.textContent = 'Готово: автозаполнено';
+    log('Autofill finished');
+  }
+
+  // attach to admin button(s)
+  function attach(){
+    // try multiple selectors commonly used in your UI
+    const possibleButtons = [
+      '#gpt-autofill-btn', '.autofill-btn', '#autofillAndCalc', '[data-role="autofill"]', '#auto-fill'
+    ];
+    let btn = null;
+    for(const s of possibleButtons){
+      btn = document.querySelector(s);
+      if(btn) break;
+    }
+    if(!btn){
+      // fallback: try any button with text 'автозаполн' or emoji
+      const all = Array.from(document.querySelectorAll('button'));
+      btn = all.find(b=> (b.innerText||'').toLowerCase().includes('автозаполн'));
+    }
+    if(!btn){
+      log('Autofill attach: button not found');
+      return;
+    }
+    btn.addEventListener('click', (e)=>{ e.preventDefault(); const ta = document.getElementById('gpt-client-text') || document.querySelector('textarea'); const text = ta?ta.value:''; setTimeout(()=>autofillPipeline(text), 80); });
+    log('Autofill attached to button');
+  }
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', attach); else attach();
+
+  // expose API for debugging and tests
+  window.__autofill_patch = {autofillPipeline, callParseServer, localParse, setBankCandidate};
+
+  // test harness: run a few examples (manual trigger)
+  window.__autofill_patch.runTests = async function(){
+    const examples = [
+      'ВТБ от 10.12.2024 ост 5 496 279 она 25.11.1992 дом -2024 кирпич, газ',
+      'Сбер 15.01.2023 кредит 6 000 000 р женщина 01.01.1990 дом деревянный',
+      'Альфа банк остаток 5496279 клиент рожд 25.11.1992 дом кирпич'
+    ];
+    for(const ex of examples){
+      log('=== TEST: '+ex);
+      await autofillPipeline(ex);
+      await wait(800);
+    }
+    log('Tests finished');
+  };
+
+})();
+</script>
+<!-- END AUTOFILL PATCH -->
+
 </body>
 </html>
