@@ -2213,5 +2213,29 @@ async function autofillPipeline(text){
 </script>
 <!-- END AUTOFILL PATCH -->
 
+
+<h3>Распознавание паспорта / ЕГРН</h3>
+<input type="file" id="ocr_file">
+<button onclick="uploadOCR()">Распознать</button>
+<pre id="ocr_result"></pre>
+
+<script>
+async function uploadOCR() {
+    const fileInput = document.getElementById("ocr_file");
+    if (fileInput.files.length === 0) {
+        alert("Выберите файл!");
+        return;
+    }
+    let form = new FormData();
+    form.append("file", fileInput.files[0]);
+    const res = await fetch("https://ingostrakh-calc.onrender.com/ocr", {
+        method: "POST",
+        body: form
+    });
+    const data = await res.json();
+    document.getElementById("ocr_result").textContent = data.text || data.error;
+}
+</script>
+
 </body>
 </html>
