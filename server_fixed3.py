@@ -10,7 +10,6 @@ from paddleocr import PaddleOCR
 from PIL import Image
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-TRAIN_FILE = os.path.join(APP_DIR, "training_data.json")
 LOG_FILE = os.path.join(APP_DIR, "server.log")
 
 app = Flask(__name__)
@@ -27,7 +26,7 @@ def log(msg):
 
 # ------------------- OCR -------------------
 log("Loading PaddleOCR model...")
-ocr = PaddleOCR(use_angle_cls=True, lang="ru")  # Модель загружается один раз
+ocr = PaddleOCR(use_angle_cls=True, lang="ru")
 log("PaddleOCR loaded.")
 
 @app.post("/ocr")
@@ -44,7 +43,8 @@ def ocr_endpoint():
 
     return jsonify({"ok": True, "text": text})
 
-# ------------------- Настройки -------------------
+# ------------------- PARSER -------------------
+
 BANKS = [
     "альфабанк", "альфа", "сбербанк", "сбер", "втб", "убрир",
     "юникредит", "тинькофф", "ренессанс", "газпром", "дом рф",
@@ -154,7 +154,6 @@ def parse_text(text):
     }
     return res
 
-# ------------------- ENDPOINTS -------------------
 @app.get("/")
 def root():
     return jsonify({"ok": True, "msg": "Parser server v6 работает"})
@@ -178,7 +177,6 @@ def parse_endpoint():
     parsed = parse_text(text)
     return jsonify({"ok": True, "data": parsed})
 
-# ------------------- RUN SERVER -------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
