@@ -3,9 +3,11 @@ import json
 import re
 import time
 from datetime import datetime
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from difflib import SequenceMatcher
+from paddleocr import PaddleOCR
+from PIL import Image
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 TRAIN_FILE = os.path.join(APP_DIR, "training_data.json")
@@ -22,6 +24,25 @@ def log(msg):
             f.write(line)
     except Exception:
         pass
+
+# ------------------- OCR -------------------
+log("Loading PaddleOCR model...")
+ocr = PaddleOCR(use_angle_cls=True, lang="ru")  # Модель загружается один раз
+log("PaddleOCR loaded.")
+
+@app.post("/ocr")
+def ocr_endpoint():
+    if "file" not in request.files:
+        return jsonify({"error": "Файл не получен"}), 400
+
+    file = request.files["file"]
+    filepath = "/tmp/upload.png"
+    file.save(filepath)
+
+    result = ocr.ocr(filepath, cls=True)
+    text = "\n".join([line[1][0] for line in result[0]])
+
+    return jsonify({"ok": True, "text": text})
 
 # ------------------- Настройки -------------------
 BANKS = [
@@ -56,7 +77,6 @@ MATERIAL_MAP = {
 
 PROP_TYPES = ["квартира", "дом", "дача", "таунхаус", "коттедж", "апарт"]
 
-# ------------------- Основные функции -------------------
 def similar(a, b):
     return SequenceMatcher(None, a, b).ratio()
 
@@ -132,29 +152,21 @@ def parse_text(text):
         "propType": find_prop_type(text),
         "material": find_material(text),
     }
-
-    # Если дом указан, но не найден материал — пытаемся угадать по словам
-    if res["propType"] == "Дом" and not res["material"]:
-        if "дер" in text.lower() or "брус" in text.lower():
-            res["material"] = "деревянный"
-        elif "кирп" in text.lower() or "жб" in text.lower() or "бетон" in text.lower():
-            res["material"] = "каменный"
-
     return res
 
-# ------------------- Flask маршруты -------------------
-@app.route("/", methods=["GET"])
+# ------------------- ENDPOINTS -------------------
+@app.get("/")
 def root():
-    return jsonify({"ok": True, "msg": "Parser server v5 работает"})
+    return jsonify({"ok": True, "msg": "Parser server v6 работает"})
 
-@app.route("/parse", methods=["POST"])
+@app.post("/parse")
 def parse_endpoint():
     text = ""
     try:
         j = request.get_json(force=True, silent=True)
         if isinstance(j, dict):
             text = j.get("text", "") or j.get("message", "")
-    except Exception:
+    except:
         pass
 
     if not text:
@@ -163,30 +175,10 @@ def parse_endpoint():
     if not text.strip():
         return jsonify({"ok": False, "error": "Empty text"}), 400
 
-    t0 = time.time()
     parsed = parse_text(text)
-    elapsed = time.time() - t0
-    log(f"/parse processed in {elapsed:.3f}s -> {parsed}")
     return jsonify({"ok": True, "data": parsed})
 
+# ------------------- RUN SERVER -------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
-    host = "0.0.0.0"
-    log(f"Starting server_fixed5 on {host}:{port}")
-    app.run(host=host, port=port)
-
-
-
-from paddleocr import PaddleOCR
-ocr = PaddleOCR(use_angle_cls=True, lang="ru")
-
-@app.post("/ocr")
-def ocr_endpoint():
-    if "file" not in request.files:
-        return jsonify({"error": "Файл не получен"}), 400
-    file = request.files["file"]
-    filename = "/tmp/upload.png"
-    file.save(filename)
-    result = ocr.ocr(filename, cls=True)
-    text = "\n".join([line[1][0] for line in result[0]])
-    return jsonify({"ok": True, "text": text})
+    app.run(host="0.0.0.0", port=port)
