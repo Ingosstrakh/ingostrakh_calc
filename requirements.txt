@@ -1,8 +1,7 @@
-Flask==2.3.2
-flask-cors==4.0.0
-requests==2.31.0
-python-dotenv==1.0.0
-paddlepaddle
-paddleocr
+paddlepaddle==2.5.2
+paddleocr==2.7.0.3
 opencv-python
 numpy
+pillow
+flask
+flask-cors
