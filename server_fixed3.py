@@ -38,10 +38,13 @@ def ocr_endpoint():
     filepath = "/tmp/upload.png"
     file.save(filepath)
 
-    result = ocr.ocr(filepath, cls=True)
+    # ❗ cls=True УДАЛЕНО (ВОТ ЭТО И ЛЕЧИТ ОШИБКУ)
+    result = ocr.ocr(filepath)
+
     text = "\n".join([line[1][0] for line in result[0]])
 
     return jsonify({"ok": True, "text": text})
+
 
 # ------------------- PARSER -------------------
 
